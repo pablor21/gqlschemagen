@@ -1,0 +1,22 @@
+# gqlschemagen configuration file
+# This file demonstrates CLI usage of gqlschemagen
+
+# Input directory containing Go structs with gql annotations
+input: "./models"
+
+# Output directory for generated GraphQL schemas
+output: "./schema"
+
+# Generation strategy: single or separate
+# - single: Generate one schema.graphql file
+# - separate: Generate one file per Go file
+genStrategy: "single"
+
+# Naming case for GraphQL types: camel, pascal, snake
+nameCase: "camel"
+
+# Prefix to strip from type names (comma-separated)
+stripPrefix: ""
+
+# Suffix to strip from type names (comma-separated)
+stripSuffix: "DTO,Entity,Model"

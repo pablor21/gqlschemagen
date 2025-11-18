@@ -1,0 +1,182 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/pablor21/gqlschemagen/generator"
+	"gopkg.in/yaml.v3"
+)
+
+func main() {
+	// Preprocess args to convert --flag to -flag for Go's flag package
+	// This allows users to use -- for long flags (standard convention)
+	// while Go's flag package only supports single dash
+	args := os.Args[1:]
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "--") {
+			args[i] = "-" + strings.TrimPrefix(arg, "--")
+		}
+	}
+
+	// Create custom FlagSet with custom usage
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Required flags:\n")
+		fmt.Fprintf(os.Stderr, "  --pkg, -p <path>              Root package dir to scan\n\n")
+		fmt.Fprintf(os.Stderr, "Optional flags:\n")
+		fmt.Fprintf(os.Stderr, "  --config, -f <file>           Path to config file (default: gqlschemagen.yml)\n")
+		fmt.Fprintf(os.Stderr, "  --out, -o <path>              Output directory or file path (default: graph/schema)\n")
+		fmt.Fprintf(os.Stderr, "  --strategy, -s <strategy>     Generation strategy: single or multiple (default: single)\n")
+		fmt.Fprintf(os.Stderr, "  --skip-existing               Skip generating files that already exist\n")
+		fmt.Fprintf(os.Stderr, "  --field-case, -c <case>       Field name case: camel, snake, pascal, original, none (default: camel)\n")
+		fmt.Fprintf(os.Stderr, "  --use-json-tag                Use json tag for field names (default: true)\n")
+		fmt.Fprintf(os.Stderr, "  --gqlgen                      Generate @goModel and @goField directives (default: false)\n")
+		fmt.Fprintf(os.Stderr, "  --model-path, -m <path>       Base path for @goModel directive\n")
+		fmt.Fprintf(os.Stderr, "  --strip-prefix <prefixes>     Comma-separated prefixes to strip from type names\n")
+		fmt.Fprintf(os.Stderr, "  --strip-suffix <suffixes>     Comma-separated suffixes to strip from type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-type-prefix <prefix>    Prefix to add to GraphQL type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-type-suffix <suffix>    Suffix to add to GraphQL type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-input-prefix <prefix>   Prefix to add to GraphQL input names\n")
+		fmt.Fprintf(os.Stderr, "  --add-input-suffix <suffix>   Suffix to add to GraphQL input names\n")
+		fmt.Fprintf(os.Stderr, "  --schema-file-name <pattern>  Schema file name pattern for multiple mode (default: {model_name}.graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --include-empty-types         Include types with no fields\n")
+	}
+
+	// Required flags
+	pkg := fs.String("pkg", "", "root package dir to scan (required)")
+	fs.StringVar(pkg, "p", "", "short for --pkg")
+
+	// Optional flags
+	configFile := fs.String("config", "gqlschemagen.yml", "path to config file")
+	fs.StringVar(configFile, "f", "gqlschemagen.yml", "short for --config")
+
+	out := fs.String("out", "", "output directory or file path")
+	fs.StringVar(out, "o", "", "short for --out")
+
+	strategy := fs.String("strategy", "single", "generation strategy: single or multiple")
+	fs.StringVar(strategy, "s", "single", "short for --strategy")
+
+	skipExisting := fs.Bool("skip-existing", false, "skip generating files that already exist")
+
+	fieldCase := fs.String("field-case", "camel", "field name case: camel, snake, pascal, original, or none")
+	fs.StringVar(fieldCase, "c", "camel", "short for --field-case")
+
+	useJsonTag := fs.Bool("use-json-tag", true, "use json tag for field names (priority: gql tag > json tag > struct field)")
+
+	useGqlGenDirectives := fs.Bool("gqlgen", false, "generate @goModel and @goField directives for gqlgen")
+	fs.BoolVar(useGqlGenDirectives, "use-gqlgen-directives", false, "long form of --gqlgen")
+
+	modelPath := fs.String("model-path", "", "base path for @goModel directive (e.g., 'github.com/user/project/models')")
+	fs.StringVar(modelPath, "m", "", "short for --model-path")
+
+	stripPrefix := fs.String("strip-prefix", "", "comma-separated list of prefixes to strip from type names (e.g., 'DB,Pg')")
+
+	stripSuffix := fs.String("strip-suffix", "", "comma-separated list of suffixes to strip from type names (e.g., 'DTO,Entity,Model')")
+
+	addTypePrefix := fs.String("add-type-prefix", "", "prefix to add to GraphQL type names (unless @gqlType specifies custom name)")
+
+	addTypeSuffix := fs.String("add-type-suffix", "", "suffix to add to GraphQL type names (unless @gqlType specifies custom name)")
+
+	addInputPrefix := fs.String("add-input-prefix", "", "prefix to add to GraphQL input names (unless @gqlInput specifies custom name)")
+
+	addInputSuffix := fs.String("add-input-suffix", "", "suffix to add to GraphQL input names (unless @gqlInput specifies custom name)")
+
+	schemaFileName := fs.String("schema-file-name", "{model_name}.graphqls", "schema file name pattern (multiple mode only)")
+
+	includeEmptyTypes := fs.Bool("include-empty-types", false, "include types with no fields in the schema")
+
+	fs.Parse(args)
+
+	// Initialize config
+	cfg := generator.NewConfig()
+
+	// Load config from YAML file if it exists
+	if *configFile != "" {
+		if _, err := os.Stat(*configFile); err == nil {
+			data, err := os.ReadFile(*configFile)
+			if err != nil {
+				log.Fatalf("failed to read config file %s: %v", *configFile, err)
+			}
+			if err := yaml.Unmarshal(data, cfg); err != nil {
+				log.Fatalf("failed to parse config file %s: %v", *configFile, err)
+			}
+			fmt.Printf("Loaded config from %s\n", *configFile)
+		} else if *configFile != "gqlschemagen.yml" {
+			// Only error if a non-default config file was specified but not found
+			log.Fatalf("config file not found: %s", *configFile)
+		}
+	}
+
+	// Override config with CLI flags (only if they were explicitly set)
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "pkg", "p":
+			cfg.Input = *pkg
+		case "out", "o":
+			cfg.Output = *out
+		case "strategy", "s":
+			cfg.GenStrategy = generator.GenStrategy(*strategy)
+		case "skip-existing":
+			cfg.SkipExisting = *skipExisting
+		case "field-case", "c":
+			cfg.FieldCase = generator.FieldCase(*fieldCase)
+		case "use-json-tag":
+			cfg.UseJsonTag = *useJsonTag
+		case "gqlgen", "use-gqlgen-directives":
+			cfg.UseGqlGenDirectives = *useGqlGenDirectives
+		case "model-path", "m":
+			cfg.ModelPath = *modelPath
+		case "strip-prefix":
+			cfg.StripPrefix = *stripPrefix
+		case "strip-suffix":
+			cfg.StripSuffix = *stripSuffix
+		case "add-type-prefix":
+			cfg.AddTypePrefix = *addTypePrefix
+		case "add-type-suffix":
+			cfg.AddTypeSuffix = *addTypeSuffix
+		case "add-input-prefix":
+			cfg.AddInputPrefix = *addInputPrefix
+		case "add-input-suffix":
+			cfg.AddInputSuffix = *addInputSuffix
+		case "schema-file-name":
+			cfg.SchemaFileName = *schemaFileName
+		case "include-empty-types":
+			cfg.IncludeEmptyTypes = *includeEmptyTypes
+		}
+	})
+
+	// Set default output based on strategy if not specified
+	if cfg.Output == "" {
+		if cfg.GenStrategy == generator.GenStrategySingle {
+			cfg.Output = "graph/schema/gqlschemagen.graphqls"
+		} else {
+			cfg.Output = "graph/schema"
+		}
+	}
+
+	// Clean output path
+	cfg.Output = filepath.Clean(cfg.Output)
+
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("config validation error: %v", err)
+	}
+
+	parser := generator.NewParser()
+	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+		log.Fatalf("parse error: %v", err)
+	}
+
+	engine := generator.NewGenerator(parser, cfg)
+	if err := engine.Run(); err != nil {
+		log.Fatalf("generation error: %v", err)
+	}
+
+	fmt.Println("done")
+}
