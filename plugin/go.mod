@@ -6,9 +6,6 @@ require (
 	github.com/99designs/gqlgen v0.17.83
 	github.com/pablor21/gqlschemagen v1.0.5
 )
-
-replace github.com/pablor21/gqlschemagen => ../
-
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.31 // indirect
