@@ -4,11 +4,8 @@ go 1.25.4
 
 require (
 	github.com/99designs/gqlgen v0.17.83
-	github.com/pablor21/gqlschemagen v0.0.1
+	github.com/pablor21/gqlschemagen v0.0.4
 )
-
-replace github.com/pablor21/gqlschemagen => ../
-
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.31 // indirect
