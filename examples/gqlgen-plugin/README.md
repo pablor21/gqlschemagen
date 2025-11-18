@@ -1,7 +1,6 @@
 # gqlgen Plugin Example
 
-This example demonstrates how to use `gqlschemagen` as a gqlgen plugin.
-
+This example demonstrates how to use [gqlschemagen](https://github.com/pablor21/gqlschemagen) as a [gqlgen](https://github.com/99designs/gqlgen) plugin.
 
 ## Setup
 
@@ -115,9 +114,9 @@ go run generate.go
 ```
 
 This will:
-1. **gqlschemagen plugin runs first**: Scans `graph/models/` for Go structs with gql annotations
+1. **[gqlschemagen](https://github.com/pablor21/gqlschemagen) plugin runs first**: Scans `graph/models/` for Go structs with gql annotations
 2. **gqlschemagen generates schemas**: Creates GraphQL schema files in `graph/schema/`
-3. **gqlgen continues**: Generates resolvers and types based on the schemas
+3. **[gqlgen](https://github.com/99designs/gqlgen) continues**: Generates resolvers and types based on the schemas
 
 ## Models
 
@@ -128,15 +127,18 @@ The `graph/models/` directory contains example Go structs with gql annotations:
 Example:
 
 ```go
-// gql.type
-// Product represents a product in the catalog
+/**
+ * @gqlType(description:"Product represents a product in the catalog")
+ */
 type Product struct {
-	ID          string  `json:"id"`
+	ID          string  `json:"id" gql:"type:ID"`
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Price       float64 `json:"price"`
 }
 ```
+
+For complete annotation syntax and examples, see the [main README](../../README.md#annotations).
 
 ## Plugin vs CLI
 
@@ -149,11 +151,11 @@ type Product struct {
 
 ## Workflow
 
-1. Define Go structs with gql annotations in `graph/models/`
+1. Define Go structs with [gql annotations](../../README.md#annotations) in `graph/models/`
 2. Run `go generate ./...`
-3. gqlschemagen generates schemas to `graph/schema/`
-4. gqlgen generates resolvers and types
-5. Implement resolver logic
+3. gqlschemagen plugin generates GraphQL schemas to `graph/schema/`
+4. [gqlgen](https://github.com/99designs/gqlgen) generates resolvers and types
+5. Implement resolver logic in the generated resolver files
 
 ## Example Output
 
@@ -194,6 +196,7 @@ For more advanced configuration options, see the [plugin README](../../plugin/RE
 
 ## Next Steps
 
-- Read the [plugin documentation](../../plugin/README.md) for detailed usage
-- See the [main README](../../README.md) for annotation syntax
-- Explore the [CLI example](../cli/) for standalone usage
+- Read the [plugin documentation](../../plugin/README.md) for detailed plugin usage and configuration
+- See the [main README](../../README.md) for complete annotation syntax and features
+- Check out the [base package documentation](https://pkg.go.dev/github.com/pablor21/gqlschemagen) for API reference
+- Explore the [CLI example](../cli/) for standalone usage without gqlgen integration
