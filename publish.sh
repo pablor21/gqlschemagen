@@ -185,8 +185,8 @@ if grep -q "^replace github.com/pablor21/gqlschemagen =>" plugin/go.mod; then
     sed -i.tmp '/^$/N;/^\n$/d' plugin/go.mod  # Remove extra blank lines
     rm -f plugin/go.mod.tmp
     
-    # Also update the version requirement to use the actual version
-    sed -i.tmp "s|github.com/pablor21/gqlschemagen v0.0.0|github.com/pablor21/gqlschemagen ${VERSION}|" plugin/go.mod
+    # Update the version requirement to use the actual version (replace any existing version)
+    sed -i.tmp "s|github.com/pablor21/gqlschemagen v[0-9]*\.[0-9]*\.[0-9]*|github.com/pablor21/gqlschemagen ${VERSION}|" plugin/go.mod
     rm -f plugin/go.mod.tmp
     
     print_info "✓ Backup saved to plugin/go.mod.bkp"
@@ -195,7 +195,7 @@ fi
 # Commit the clean version
 print_info "Committing clean release..."
 git add plugin/go.mod
-git commit -m "chore: release ${VERSION}"
+git commit -m "release: ${VERSION}"
 
 # Tag main module
 print_info "Tagging main module with $VERSION..."
@@ -256,7 +256,9 @@ print_info "✓ Proxy fetch triggered (indexing may take 10-30 minutes)"
 if [ -f plugin/go.mod.bkp ]; then
     print_info "Restoring replace directive from backup..."
     mv plugin/go.mod.bkp plugin/go.mod
-    print_info "✓ Replace directive restored (backup file removed)"
+    git add plugin/go.mod
+    git commit -m "chore: restore replace directive for development"
+    print_info "✓ Replace directive restored and committed"
 else
     print_warning "No backup found (plugin/go.mod.bkp), skipping restore"
 fi
