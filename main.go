@@ -14,12 +14,14 @@
 //
 // Usage:
 //
-//	gqlschemagen --pkg ./models --out graph/schema/generated.graphqls
+//	gqlschemagen init                                          # Create default configuration file
+//	gqlschemagen generate --pkg ./models                       # Generate schema from Go structs
 //
 // For more information and examples, visit: https://github.com/pablor21/gqlschemagen
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -31,21 +33,97 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+//go:embed gqlschemagen.yml
+var DefaultConfig embed.FS
+
 func main() {
-	// Preprocess args to convert --flag to -flag for Go's flag package
-	// This allows users to use -- for long flags (standard convention)
-	// while Go's flag package only supports single dash
-	args := os.Args[1:]
-	for i, arg := range args {
-		if strings.HasPrefix(arg, "--") {
-			args[i] = "-" + strings.TrimPrefix(arg, "--")
-		}
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(1)
 	}
 
-	// Create custom FlagSet with custom usage
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	command := os.Args[1]
+	switch command {
+	case "init":
+		initCommand(os.Args[2:])
+	case "generate":
+		generateCommand(os.Args[2:])
+	case "--help", "-h", "help":
+		printUsage()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, "GQLSchemaGen - Generate GraphQL schemas from Go structs\n\n")
+	fmt.Fprintf(os.Stderr, "Usage:\n")
+	fmt.Fprintf(os.Stderr, "  gqlschemagen init [options]              Create default configuration file\n")
+	fmt.Fprintf(os.Stderr, "  gqlschemagen generate [options]          Generate GraphQL schema from Go structs\n")
+	fmt.Fprintf(os.Stderr, "  gqlschemagen help                        Show this help message\n\n")
+	fmt.Fprintf(os.Stderr, "Run 'gqlschemagen <command> --help' for more information on a command.\n")
+}
+
+func preprocessArgs(args []string) []string {
+	// Convert --flag to -flag for Go's flag package
+	processed := make([]string, len(args))
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "--") {
+			processed[i] = "-" + strings.TrimPrefix(arg, "--")
+		} else {
+			processed[i] = arg
+		}
+	}
+	return processed
+}
+
+func initCommand(args []string) {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: gqlschemagen init [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Create a default gqlschemagen.yml configuration file in the current directory.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fmt.Fprintf(os.Stderr, "  --output, -o <file>    Output file path (default: gqlschemagen.yml)\n")
+		fmt.Fprintf(os.Stderr, "  --force, -f            Overwrite existing file\n")
+	}
+
+	// Preprocess args
+	processedArgs := preprocessArgs(args)
+
+	output := fs.String("output", "gqlschemagen.yml", "output file path")
+	fs.StringVar(output, "o", "gqlschemagen.yml", "short for --output")
+	force := fs.Bool("force", false, "overwrite existing file")
+	fs.BoolVar(force, "f", false, "short for --force")
+
+	fs.Parse(processedArgs)
+
+	// Check if file already exists
+	if _, err := os.Stat(*output); err == nil && !*force {
+		log.Fatalf("File %s already exists. Use --force to overwrite.", *output)
+	}
+
+	// Read embedded default config
+	configData, err := DefaultConfig.ReadFile("gqlschemagen.yml")
+	if err != nil {
+		log.Fatalf("Failed to read default config: %v", err)
+	}
+
+	// Write to output file
+	if err := os.WriteFile(*output, configData, 0644); err != nil {
+		log.Fatalf("Failed to write config file: %v", err)
+	}
+
+	fmt.Printf("Created configuration file: %s\n", *output)
+	fmt.Println("Edit this file to customize your schema generation settings.")
+}
+
+func generateCommand(args []string) {
+	fs := flag.NewFlagSet("generate", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: gqlschemagen generate [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Generate GraphQL schema from Go structs.\n\n")
 		fmt.Fprintf(os.Stderr, "Required flags:\n")
 		fmt.Fprintf(os.Stderr, "  --pkg, -p <path>              Root package dir to scan\n\n")
 		fmt.Fprintf(os.Stderr, "Optional flags:\n")
@@ -66,6 +144,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --schema-file-name <pattern>  Schema file name pattern for multiple mode (default: {model_name}.graphqls)\n")
 		fmt.Fprintf(os.Stderr, "  --include-empty-types         Include types with no fields\n")
 	}
+
+	// Preprocess args
+	processedArgs := preprocessArgs(args)
 
 	// Required flags
 	pkg := fs.String("pkg", "", "root package dir to scan (required)")
@@ -110,7 +191,7 @@ func main() {
 
 	includeEmptyTypes := fs.Bool("include-empty-types", false, "include types with no fields in the schema")
 
-	fs.Parse(args)
+	fs.Parse(processedArgs)
 
 	// Initialize config
 	cfg := generator.NewConfig()
