@@ -1679,7 +1679,7 @@ Finally, run gqlgen and implement the resolvers that use your domain models dire
 
 ### Wrong Field Names
 
-- Check `-field-case` flag or `field_case` in plugin config
+- Check `-field-case` flag or `field_case` in config
 - Verify struct tags (`name:` takes precedence)
 - If using `-use-json-tag`, check json tags
 
