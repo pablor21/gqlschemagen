@@ -11,19 +11,15 @@ structs and generates GraphQL schema files with support for [gqlgen](https://git
 custom naming strategies, and extensive configuration options.
 
 
-FOR THE GQLGEN PLUGIN PLEASE SEE THE [PLUGIN DOCUMENTATION](plugin/README.md)
-
-
 ## Table of Contents
 
 - [Features](#features)
 - [Installation](#installation)
   - [Install as a Library](#install-as-a-library)
   - [Install as a CLI Tool](#install-as-a-cli-tool)
-  - [Install as a gqlgen Plugin](#install-as-a-gqlgen-plugin)
 - [Quick Start](#quick-start)
   - [Standalone CLI](#standalone-cli)
-  - [As a gqlgen Plugin](#as-a-gqlgen-plugin)
+  - [Integration with gqlgen](#integration-with-gqlgen)
 - [Annotations](#annotations)
   - [Type-level Annotations](#type-level-annotations)
   - [Field-level Struct Tags](#field-level-struct-tags)
@@ -55,7 +51,6 @@ FOR THE GQLGEN PLUGIN PLEASE SEE THE [PLUGIN DOCUMENTATION](plugin/README.md)
 - 📋 **Input Type Generation**: Auto-generate GraphQL Input types
 - 📚 **Field Descriptions**: Extract from struct tags or comments
 - ⚙️ **Highly Configurable**: CLI flags and per-struct customization
-- 🔌 **gqlgen Plugin**: Can be used as a standalone tool or [gqlgen](https://github.com/99designs/gqlgen) plugin
 - 🧩 **Embedded Struct Support**: Automatically expand embedded struct fields into parent types
 - ➕ **Extra Fields**: Add resolver-only fields to types and inputs with @gqlTypeExtraField and @gqlInputExtraField
 - 🌐 **Glob Pattern Support**: Scan packages using glob patterns like `**/models` or `internal/**/entities`
@@ -103,18 +98,6 @@ gqlschemagen --pkg ./internal/domain/entities --out ./graph/schema
 # Or with short flags
 gqlschemagen -p ./internal/domain/entities -o ./graph/schema
 ```
-
-### Install as a gqlgen Plugin
-
-The plugin is in a **separate module** that includes gqlgen as a dependency.
-
-Add to your project's dependencies:
-
-```bash
-go get github.com/pablor21/gqlschemagen/plugin
-```
-
-**Important**: gqlgen plugins must be registered in a custom `generate.go` file, not in `gqlgen.yml`. See the [Plugin Documentation](plugin/README.md) for complete setup instructions.
 
 ## Quick Start
 
@@ -216,49 +199,47 @@ gqlschemagen init
 This creates a `gqlschemagen.yml` file with all available options:
 
 ```yaml
-# gqlschemagen Plugin Configuration
+# gqlschemagen Configuration
 # Packages to scan for Go structs with gql annotations
 packages:
    - ./
 
-# Generator configuration (optional - defaults shown)
-generator:
-  # Output strategy: "single" for one file, "multiple" for separate files per type
-  strategy: single
-  
-  # Output path (file for single strategy, directory for multiple)
-  output: graph/schema/generated.graphql
-  
-  # Field name transformation: camel, snake, pascal, original, none
-  field_case: camel
-  
-  # Use json struct tags for field names when gql tag is not present
-  use_json_tag: true
-  
-  # Generate @goModel and @goField directives for gqlgen
-  use_gqlgen_directives: false
-  
-  # Base path for @goModel directive (e.g., 'github.com/user/project/models')
-  model_path: ""
-  
-  # Strip prefixes/suffixes from type names (comma-separated)
-  strip_prefix: ""
-  strip_suffix: ""
-  
-  # Add prefixes/suffixes to type/input names
-  add_type_prefix: ""
-  add_type_suffix: ""
-  add_input_prefix: ""
-  add_input_suffix: ""
-  
-  # Schema file name pattern for multiple mode (default: {model_name}.graphqls)
-  schema_file_name: "{model_name}.graphqls"
-  
-  # Include types with no fields
-  include_empty_types: false
-  
-  # Skip generating files that already exist
-  skip_existing: false
+# Output strategy: "single" for one file, "multiple" for separate files per type
+strategy: single
+
+# Output path (file for single strategy, directory for multiple)
+output: graph/schema/generated.graphql
+
+# Field name transformation: camel, snake, pascal, original, none
+field_case: camel
+
+# Use json struct tags for field names when gql tag is not present
+use_json_tag: true
+
+# Generate @goModel and @goField directives for gqlgen
+use_gqlgen_directives: false
+
+# Base path for @goModel directive (e.g., 'github.com/user/project/models')
+model_path: ""
+
+# Strip prefixes/suffixes from type names (comma-separated)
+strip_prefix: ""
+strip_suffix: ""
+
+# Add prefixes/suffixes to type/input names
+add_type_prefix: ""
+add_type_suffix: ""
+add_input_prefix: ""
+add_input_suffix: ""
+
+# Schema file name pattern for multiple mode (default: {model_name}.graphqls)
+schema_file_name: "{model_name}.graphqls"
+
+# Include types with no fields
+include_empty_types: false
+
+# Skip generating files that already exist
+skip_existing: false
 ```
 
 Then run:
@@ -278,9 +259,133 @@ go run github.com/pablor21/gqlschemagen generate --config my-config.yml
 
 **Note:** CLI flags override values from the config file when explicitly set.
 
-### As a [gqlgen](https://github.com/99designs/gqlgen) Plugin
+### Integration with gqlgen
 
-[See Plugin Documentation](./plugin/README.md) for detailed plugin usage, configuration, and integration with [gqlgen](https://github.com/99designs/gqlgen).
+To use gqlschemagen with gqlgen, you should run the schema generator **before** running gqlgen. This ensures your GraphQL schemas are up-to-date before gqlgen generates resolvers and models.
+
+#### Option 1: Using go:generate Directives
+
+Add this to a file in your project (e.g., `graph/generate.go`):
+
+```go
+package graph
+
+//go:generate go run github.com/pablor21/gqlschemagen generate
+//go:generate go run github.com/99designs/gqlgen generate
+```
+
+Then run:
+
+```bash
+go generate ./...
+```
+
+This will:
+1. First run gqlschemagen to generate GraphQL schemas from your Go structs
+2. Then run gqlgen to generate resolvers and type-safe code
+
+#### Option 2: Custom generate.go Script
+
+Create a `generate.go` file with a custom main function:
+
+```go
+//go:build ignore
+// +build ignore
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+)
+
+func main() {
+	// Step 1: Generate GraphQL schemas from Go structs
+	fmt.Println("Generating GraphQL schemas from Go structs...")
+	cmd := exec.Command("gqlschemagen", "generate")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to generate schemas: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Step 2: Run gqlgen to generate resolvers
+	fmt.Println("\nGenerating gqlgen code...")
+	cmd = exec.Command("go", "run", "github.com/99designs/gqlgen", "generate")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to generate gqlgen code: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\n✓ Code generation complete!")
+}
+```
+
+Run it with:
+
+```bash
+go run generate.go
+```
+
+#### Option 3: Makefile
+
+Create a `Makefile` with targets:
+
+```makefile
+.PHONY: generate schema codegen
+
+generate: schema codegen
+
+schema:
+	@echo "Generating GraphQL schemas..."
+	@gqlschemagen generate
+
+codegen:
+	@echo "Generating gqlgen code..."
+	@go run github.com/99designs/gqlgen generate
+```
+
+Then run:
+
+```bash
+make generate
+```
+
+#### Hybrid Approach: Auto-generated + Hand-written Schemas
+
+You can combine auto-generated schemas with hand-written ones:
+
+```yaml
+# gqlgen.yml
+schema:
+  - graph/schema/generated.graphql  # Auto-generated from structs
+  - graph/schema/queries.graphql    # Hand-written queries
+  - graph/schema/mutations.graphql  # Hand-written mutations
+```
+
+```yaml
+# gqlschemagen.yml
+packages:
+  - ./internal/models
+output: graph/schema/generated.graphql  # Generate to separate file
+use_gqlgen_directives: true            # Add @goModel directives
+model_path: "github.com/youruser/yourproject/internal/models"
+```
+
+This approach lets you:
+- Auto-generate types from domain models
+- Manually write queries, mutations, and subscriptions
+- Keep concerns separated and organized
+
+**Benefits:**
+- Schemas stay in sync with your Go models
+- No manual schema writing for domain types
+- Full type safety from structs to GraphQL
+- Single source of truth for your data models
 
 ## Annotations
 
@@ -1453,55 +1558,115 @@ type ContentWithMetadata {
 - Only embedded structs found in the scanned packages are expanded
 - Pointer embedded structs (`*Base`) are also supported
 
-## Integration with gqlgen
+## Best Practices for gqlgen Integration
 
-### Plugin Integration
+### Recommended Project Structure
 
-When used as a gqlgen plugin, the struct scanner runs automatically before gqlgen's code generation. This provides a seamless workflow:
-
-1. **Schema Generation**: Scan Go structs → Generate `.graphqls` files
-2. **Code Generation**: gqlgen reads schemas → Generate resolvers and models
-
-**Benefits:**
-- Single command to generate everything: `go run github.com/99designs/gqlgen generate`
-- Schemas stay in sync with your domain models
-- No manual schema writing for basic CRUD types
-- Full type safety from Go structs to GraphQL
-
-### Example Workflow
-
-```bash
-# 1. Configure gqlgen.yml (see examples/gqlgen.yml.example)
-# 2. Add annotations to your Go structs
-# 3. Run gqlgen
-go run github.com/99designs/gqlgen generate
-
-# The plugin will:
-# - Scan your packages
-# - Generate GraphQL schemas
-# - Then gqlgen generates resolvers
+```
+project/
+├── graph/
+│   ├── schema/
+│   │   ├── generated.graphql      # Auto-generated from structs
+│   │   ├── queries.graphql        # Hand-written queries
+│   │   └── mutations.graphql      # Hand-written mutations
+│   ├── model/                      # gqlgen generated models
+│   ├── resolver.go                 # Root resolver
+│   └── generate.go                 # Generation orchestration
+├── internal/
+│   └── models/                     # Your domain models with annotations
+├── gqlgen.yml                      # gqlgen configuration
+└── gqlschemagen.yml               # gqlschemagen configuration
 ```
 
-### Hybrid Approach
+### Configuration Tips
 
-You can combine auto-generated and hand-written schemas:
-
+**gqlschemagen.yml:**
 ```yaml
-# gqlgen.yml
-schema:
-  - graph/schema/generated/*.graphqls  # Auto-generated from structs
-  - graph/schema/custom/*.graphql      # Hand-written queries/mutations
+packages:
+  - ./internal/models
+output: graph/schema/generated.graphql
+use_gqlgen_directives: true  # Important for gqlgen integration
+model_path: "github.com/youruser/yourproject/internal/models"
 ```
 
-This lets you:
-- Auto-generate types from domain models
-- Manually write queries, mutations, and subscriptions
-- Add custom types not backed by Go structs
+**gqlgen.yml:**
+```yaml
+schema:
+  - graph/schema/*.graphql
 
-### See Also
+autobind:
+  - github.com/youruser/yourproject/internal/models
 
-- `examples/gqlgen.yml.example` - Full gqlgen configuration example
-- [gqlgen documentation](https://gqlgen.com) - Official gqlgen docs
+models:
+  # Let gqlgen use your domain models directly
+  User:
+    model: github.com/youruser/yourproject/internal/models.User
+  Post:
+    model: github.com/youruser/yourproject/internal/models.Post
+```
+
+### Workflow
+
+1. **Define your domain models** in `internal/models` with gqlschemagen annotations
+2. **Run gqlschemagen** to generate GraphQL schemas
+3. **Write custom queries/mutations** in separate schema files
+4. **Run gqlgen** to generate resolvers and type-safe code
+5. **Implement resolvers** using your domain models
+
+### Example Domain Model
+
+```go
+package models
+
+/**
+ * @gqlType(name:"User",description:"A user in the system")
+ * @gqlInput(name:"CreateUserInput")
+ */
+type User struct {
+    ID       string `gql:"id,type:ID,required,description:Unique user identifier"`
+    Email    string `gql:"email,required,description:User email address"`
+    Username string `gql:"username,required,description:Username"`
+    CreatedAt time.Time `gql:"createdAt,required,description:Account creation timestamp"`
+}
+```
+
+Running `gqlschemagen generate` produces:
+
+```graphql
+"""A user in the system"""
+type User @goModel(model: "github.com/youruser/yourproject/internal/models.User") {
+  """Unique user identifier"""
+  id: ID!
+  """User email address"""
+  email: String!
+  """Username"""
+  username: String!
+  """Account creation timestamp"""
+  createdAt: Time!
+}
+
+input CreateUserInput @goModel(model: "github.com/youruser/yourproject/internal/models.User") {
+  email: String!
+  username: String!
+  createdAt: Time!
+}
+```
+
+Then you manually write queries in `graph/schema/queries.graphql`:
+
+```graphql
+type Query {
+  user(id: ID!): User
+  users(limit: Int, offset: Int): [User!]!
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User!
+  updateUser(id: ID!, input: CreateUserInput!): User!
+}
+```
+
+Finally, run gqlgen and implement the resolvers that use your domain models directly.
 
 ## Troubleshooting
 

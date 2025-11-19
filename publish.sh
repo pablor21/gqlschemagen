@@ -149,21 +149,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Run plugin tests only if replace directive exists
-if grep -q "^replace github.com/pablor21/gqlschemagen =>" plugin/go.mod; then
-    print_info "Running tests in plugin module..."
-    cd plugin
-    go test ./... -v
-    if [ $? -ne 0 ]; then
-        print_error "Tests failed in plugin module"
-        cd ..
-        exit 1
-    fi
-    cd ..
-else
-    print_warning "Skipping plugin tests (replace directive not found, this is normal for published versions)"
-fi
-
 print_info "All tests passed ✓"
 
 # Push current state to GitHub
@@ -174,108 +159,52 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Create backup and clean go.mod for release
-print_info "Preparing clean release (removing replace directive)..."
-if grep -q "^replace github.com/pablor21/gqlschemagen =>" plugin/go.mod; then
-    # Save the original go.mod for restoration
-    cp plugin/go.mod plugin/go.mod.bkp
-    
-    # Remove the replace directive and blank line after it
-    sed -i.tmp '/^replace github.com\/pablor21\/gqlschemagen =>/d' plugin/go.mod
-    sed -i.tmp '/^$/N;/^\n$/d' plugin/go.mod  # Remove extra blank lines
-    rm -f plugin/go.mod.tmp
-    
-    # Update the version requirement to use the actual version (replace any existing version)
-    sed -i.tmp "s|github.com/pablor21/gqlschemagen v[0-9]*\.[0-9]*\.[0-9]*|github.com/pablor21/gqlschemagen ${VERSION}|" plugin/go.mod
-    rm -f plugin/go.mod.tmp
-    
-    print_info "✓ Backup saved to plugin/go.mod.bkp"
-fi
-
 # Commit the clean version
-print_info "Committing clean release..."
-git add plugin/go.mod
-git commit -m "release: ${VERSION}"
+print_info "Committing release..."
+git commit --allow-empty -m "release: ${VERSION}"
 
 # Tag main module
 print_info "Tagging main module with $VERSION..."
 git tag -a "$VERSION" -m "Release $VERSION"
 
-# Tag plugin module (same version with /plugin suffix)
-print_info "Tagging plugin module with plugin/$VERSION..."
-git tag -a "plugin/$VERSION" -m "Release plugin $VERSION"
-
-# Push tags and clean release commit
+# Push tags and release commit
 print_info "Pushing tags and release commit to GitHub..."
 git push origin $BRANCH
 git push origin "$VERSION"
-git push origin "plugin/$VERSION"
 
 # Verify tags were pushed correctly
 print_info "Verifying tags on remote..."
 MAIN_TAG_SHA=$(git ls-remote --tags origin | grep "refs/tags/$VERSION^{}" | awk '{print $1}')
-PLUGIN_TAG_SHA=$(git ls-remote --tags origin | grep "refs/tags/plugin/$VERSION^{}" | awk '{print $1}')
 
 if [ -z "$MAIN_TAG_SHA" ]; then
     print_error "Main tag $VERSION not found on remote!"
     exit 1
 fi
 
-if [ -z "$PLUGIN_TAG_SHA" ]; then
-    print_error "Plugin tag plugin/$VERSION not found on remote!"
-    exit 1
-fi
-
 EXPECTED_SHA=$(git rev-parse HEAD)
-if [ "$MAIN_TAG_SHA" != "$EXPECTED_SHA" ] || [ "$PLUGIN_TAG_SHA" != "$EXPECTED_SHA" ]; then
+if [ "$MAIN_TAG_SHA" != "$EXPECTED_SHA" ]; then
     print_error "Tag SHA mismatch! Expected: $EXPECTED_SHA"
     print_error "Main tag: $MAIN_TAG_SHA"
-    print_error "Plugin tag: $PLUGIN_TAG_SHA"
     exit 1
 fi
 
 print_info "✓ Tags verified on remote (SHA: ${EXPECTED_SHA:0:8})"
 
-# Verify go.mod is clean at the tagged commit
-print_info "Verifying plugin/go.mod is clean at tag..."
-TAGGED_GOMOD=$(git show "plugin/$VERSION:plugin/go.mod")
-if echo "$TAGGED_GOMOD" | grep -q "^replace github.com/pablor21/gqlschemagen =>"; then
-    print_error "Replace directive found in tagged version!"
-    print_error "The tag points to a commit with replace directive, which will break installation."
-    exit 1
-fi
-print_info "✓ plugin/go.mod is clean at tag"
-
 # Trigger Go proxy to fetch the module
-print_info "Triggering Go proxy to fetch modules..."
+print_info "Triggering Go proxy to fetch module..."
 GOPROXY=https://proxy.golang.org,direct go list -m github.com/pablor21/gqlschemagen@$VERSION > /dev/null 2>&1 || true
-GOPROXY=https://proxy.golang.org,direct go list -m github.com/pablor21/gqlschemagen/plugin@$VERSION > /dev/null 2>&1 || true
 print_info "✓ Proxy fetch triggered (indexing may take 10-30 minutes)"
-
-# Restore replace directive from backup
-if [ -f plugin/go.mod.bkp ]; then
-    print_info "Restoring replace directive from backup..."
-    mv plugin/go.mod.bkp plugin/go.mod
-    git add plugin/go.mod
-    git commit -m "chore: restore replace directive for development"
-    print_info "✓ Replace directive restored and committed"
-else
-    print_warning "No backup found (plugin/go.mod.bkp), skipping restore"
-fi
 
 print_info "Successfully published:"
 print_info "  - Main module: github.com/pablor21/gqlschemagen@$VERSION"
-print_info "  - Plugin module: github.com/pablor21/gqlschemagen/plugin@$VERSION"
 print_info ""
 print_info "Installation:"
-print_info "  Main:   go get github.com/pablor21/gqlschemagen@$VERSION"
-print_info "  Plugin: go get github.com/pablor21/gqlschemagen/plugin@$VERSION"
+print_info "  go get github.com/pablor21/gqlschemagen@$VERSION"
 print_info ""
 print_info "Note: The Go checksum database may take 10-30 minutes to index."
 print_info "      If installation fails with 'invalid version: unknown revision',"
-print_info "      wait a few minutes and try again, or use:"
-print_info "      GONOSUMDB=github.com/pablor21/gqlschemagen/plugin go get github.com/pablor21/gqlschemagen/plugin@$VERSION"
+print_info "      wait a few minutes and try again."
 print_info ""
 print_info "pkg.go.dev will index automatically (may take a few minutes):"
 print_info "  - https://pkg.go.dev/github.com/pablor21/gqlschemagen@$VERSION"
-print_info "  - https://pkg.go.dev/github.com/pablor21/gqlschemagen/plugin@$VERSION"
+

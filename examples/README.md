@@ -1,6 +1,6 @@
 # Examples
 
-This directory contains examples of how to use `gqlschemagen` both as a CLI tool and as a gqlgen plugin.
+This directory contains examples of how to use `gqlschemagen` as a CLI tool.
 
 ## Directory Structure
 
@@ -8,13 +8,10 @@ This directory contains examples of how to use `gqlschemagen` both as a CLI tool
 examples/
 ├── cli/                    # CLI usage example
 │   ├── models/            # Go structs with gql annotations
-│   └── gqlschemagen.yml     # Configuration file
-└── gqlgen-plugin/         # gqlgen plugin usage example
-    ├── graph/
-    │   └── models/        # Go structs with gql annotations
-    ├── generate.go        # Custom gqlgen entrypoint with plugin
-    ├── gqlgen.yml         # Standard gqlgen config (no plugins section)
-    └── README.md          # Plugin setup instructions
+│   └── gqlschemagen.yml   # Configuration file
+├── embedded-structs.go    # Example of embedded struct handling
+├── extra-fields-demo.go   # Example of extra fields directives
+└── multiple-annotations.go # Example of multiple annotations
 ```
 
 ## Quick Start
@@ -28,18 +25,9 @@ gqlschemagen
 
 This will generate GraphQL schemas from the models in `models/` directory using the configuration in `gqlschemagen.yml`.
 
-### Plugin Example
-
-```bash
-cd examples/gqlgen-plugin
-go run github.com/99designs/gqlgen generate
-```
-
-This will use gqlgen with the gqlschemagen plugin to generate schemas from the models.
-
 ## Model Annotations
 
-Both examples use the same annotation format:
+Examples use the following annotation format:
 
 ```go
 /**
@@ -53,4 +41,4 @@ type User struct {
 }
 ```
 
-See individual example READMEs for more details.
+See individual example files for more details.

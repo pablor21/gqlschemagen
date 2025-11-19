@@ -251,6 +251,34 @@ func generateCommand(args []string) {
 		}
 	})
 
+	// Generate schema
+	if err := Generate(cfg); err != nil {
+		log.Fatalf("generation failed: %v", err)
+	}
+
+	fmt.Println("done")
+}
+
+func GenerateFromDefaultConfig() error {
+	return GenerateFromConfigFile("gqlschemagen.yml")
+}
+
+func GenerateFromConfigFile(configPath string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file %s: %w", configPath, err)
+	}
+
+	var cfg generator.Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse config file %s: %w", configPath, err)
+	}
+
+	return Generate(&cfg)
+}
+
+// Generate runs the schema generation with the provided configuration
+func Generate(cfg *generator.Config) error {
 	// Normalize configuration
 	cfg.Normalize()
 
@@ -268,21 +296,22 @@ func generateCommand(args []string) {
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("config validation error: %v", err)
+		return fmt.Errorf("config validation error: %w", err)
 	}
 
 	// Parse all packages
 	parser := generator.NewParser()
 	for _, pkgPath := range cfg.Packages {
 		if err := parser.Walk(generator.PkgDir(pkgPath)); err != nil {
-			log.Fatalf("parse error for package %s: %v", pkgPath, err)
+			return fmt.Errorf("parse error for package %s: %w", pkgPath, err)
 		}
 	}
 
+	// Generate schema
 	engine := generator.NewGenerator(parser, cfg)
 	if err := engine.Run(); err != nil {
-		log.Fatalf("generation error: %v", err)
+		return fmt.Errorf("generation error: %w", err)
 	}
 
-	fmt.Println("done")
+	return nil
 }
