@@ -123,7 +123,7 @@ func TestValidation(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	p.cfg.Output = filepath.Join(tmpDir, "schema.graphql")
-	p.cfg.Input = "../examples"
+	p.cfg.Packages = []string{"../examples"}
 
 	// Should fail validation with invalid field case
 	err = p.generateSchema("../examples")

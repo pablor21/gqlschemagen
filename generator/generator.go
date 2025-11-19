@@ -114,7 +114,7 @@ func (g *Generator) buildDependencyOrder() []string {
 func (g *Generator) generateSingleFile(orders []string) error {
 	outFile := g.Config.Output
 	if outFile == "" {
-		outFile = filepath.Join(g.Config.OutDir, "schema.graphql")
+		outFile = "schema.graphql"
 	}
 
 	if g.Config.SkipExisting && FileExists(outFile) {
@@ -134,19 +134,23 @@ func (g *Generator) generateSingleFile(orders []string) error {
 			continue
 		}
 
-		// Generate type only if @gqlType directive is present
+		// Generate all types from @gqlType directives
 		if d.HasTypeDirective {
-			typeContent := g.generateType(typeSpec, g.P.Structs[typeName], d)
-			if typeContent != "" {
-				buf.WriteString(typeContent)
+			for _, typeDef := range d.Types {
+				typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, typeDef)
+				if typeContent != "" {
+					buf.WriteString(typeContent)
+				}
 			}
 		}
 
-		// Generate input only if @gqlInput directive is present
+		// Generate all inputs from @gqlInput directives
 		if d.HasInputDirective {
-			inputContent := g.generateInput(typeSpec, g.P.Structs[typeName], d)
-			if inputContent != "" {
-				buf.WriteString(inputContent)
+			for _, inputDef := range d.Inputs {
+				inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, inputDef)
+				if inputContent != "" {
+					buf.WriteString(inputContent)
+				}
 			}
 		}
 	}
@@ -186,19 +190,23 @@ func (g *Generator) generateMultipleFiles(orders []string) error {
 
 		buf := strings.Builder{}
 
-		// Generate type only if @gqlType directive is present
+		// Generate all types from @gqlType directives
 		if d.HasTypeDirective {
-			typeContent := g.generateType(typeSpec, g.P.Structs[typeName], d)
-			if typeContent != "" {
-				buf.WriteString(typeContent)
+			for _, typeDef := range d.Types {
+				typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, typeDef)
+				if typeContent != "" {
+					buf.WriteString(typeContent)
+				}
 			}
 		}
 
-		// Generate input only if @gqlInput directive is present
+		// Generate all inputs from @gqlInput directives
 		if d.HasInputDirective {
-			inputContent := g.generateInput(typeSpec, g.P.Structs[typeName], d)
-			if inputContent != "" {
-				buf.WriteString(inputContent)
+			for _, inputDef := range d.Inputs {
+				inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, inputDef)
+				if inputContent != "" {
+					buf.WriteString(inputContent)
+				}
 			}
 		}
 
@@ -224,11 +232,12 @@ func (g *Generator) resolveFileName(d StructDirectives, typeName string) string 
 	return pattern
 }
 
-func (g *Generator) generateType(typeSpec *ast.TypeSpec, st *ast.StructType, d StructDirectives) string {
+// generateTypeFromDef generates a GraphQL type from a specific TypeDefinition
+func (g *Generator) generateTypeFromDef(typeSpec *ast.TypeSpec, st *ast.StructType, d StructDirectives, typeDef TypeDefinition) string {
 	name := d.GQLName
-	if d.GQLType != "" {
+	if typeDef.Name != "" {
 		// Use custom type name from @gqlType annotation
-		name = d.GQLType
+		name = typeDef.Name
 	} else {
 		// Apply prefix/suffix stripping only when no custom name is specified
 		name = StripPrefixSuffix(name, g.Config.StripPrefix, g.Config.StripSuffix)
@@ -244,8 +253,8 @@ func (g *Generator) generateType(typeSpec *ast.TypeSpec, st *ast.StructType, d S
 	buf := strings.Builder{}
 
 	// Add description if present
-	if d.TypeDescription != "" {
-		buf.WriteString(fmt.Sprintf("\"\"\"%s\"\"\"\n", d.TypeDescription))
+	if typeDef.Description != "" {
+		buf.WriteString(fmt.Sprintf("\"\"\"%s\"\"\"\n", typeDef.Description))
 	}
 
 	// Type declaration
@@ -262,16 +271,29 @@ func (g *Generator) generateType(typeSpec *ast.TypeSpec, st *ast.StructType, d S
 
 	buf.WriteString(" {\n")
 
-	// Generate fields from struct
-	fields := g.generateFields(st, d, false) // false = for type, not input
-	if len(fields) == 0 && len(d.ExtraFields) == 0 && !g.Config.IncludeEmptyTypes {
+	// Generate fields from struct (use typeDef.IgnoreAll instead of d.TypeIgnoreAll)
+	fields := g.generateFieldsForType(st, d, typeDef.IgnoreAll, false)
+
+	// Count applicable extra fields for this type
+	applicableExtraFields := 0
+	for _, ef := range d.TypeExtraFields {
+		if shouldApplyExtraField(ef, name) {
+			applicableExtraFields++
+		}
+	}
+
+	if len(fields) == 0 && applicableExtraFields == 0 && !g.Config.IncludeEmptyTypes {
 		return "" // Skip empty types
 	}
 
 	buf.WriteString(fields)
 
-	// Add extra fields from @gqlExtraField annotations
-	for _, ef := range d.ExtraFields {
+	// Add extra fields from @gqlTypeExtraField annotations
+	for _, ef := range d.TypeExtraFields {
+		// Check if this field applies to this type
+		if !shouldApplyExtraField(ef, name) {
+			continue
+		}
 		if ef.Description != "" {
 			buf.WriteString(fmt.Sprintf("\t\"\"\"%s\"\"\"\n", ef.Description))
 		}
@@ -287,8 +309,9 @@ func (g *Generator) generateType(typeSpec *ast.TypeSpec, st *ast.StructType, d S
 	return buf.String()
 }
 
-func (g *Generator) generateInput(typeSpec *ast.TypeSpec, st *ast.StructType, d StructDirectives) string {
-	inputName := d.GQLInput
+// generateInputFromDef generates a GraphQL input from a specific InputDefinition
+func (g *Generator) generateInputFromDef(typeSpec *ast.TypeSpec, st *ast.StructType, d StructDirectives, inputDef InputDefinition) string {
+	inputName := inputDef.Name
 	if inputName == "" {
 		// Apply prefix/suffix stripping before adding "Input" suffix
 		baseName := StripPrefixSuffix(d.GQLName, g.Config.StripPrefix, g.Config.StripSuffix)
@@ -300,15 +323,13 @@ func (g *Generator) generateInput(typeSpec *ast.TypeSpec, st *ast.StructType, d 
 		if g.Config.AddInputSuffix != "" {
 			inputName = inputName + g.Config.AddInputSuffix
 		}
-	} else {
-		// Custom name provided, don't add prefix/suffix
 	}
 
 	buf := strings.Builder{}
 
 	// Add description if present
-	if d.InputDescription != "" {
-		buf.WriteString(fmt.Sprintf("\"\"\"%s\"\"\"\n", d.InputDescription))
+	if inputDef.Description != "" {
+		buf.WriteString(fmt.Sprintf("\"\"\"%s\"\"\"\n", inputDef.Description))
 	}
 
 	// Input declaration
@@ -325,16 +346,29 @@ func (g *Generator) generateInput(typeSpec *ast.TypeSpec, st *ast.StructType, d 
 
 	buf.WriteString(" {\n")
 
-	// Generate fields from struct
-	fields := g.generateFields(st, d, true) // true = for input
-	if len(fields) == 0 && len(d.ExtraFields) == 0 && !g.Config.IncludeEmptyTypes {
+	// Generate fields from struct (use inputDef.IgnoreAll instead of d.InputIgnoreAll)
+	fields := g.generateFieldsForType(st, d, inputDef.IgnoreAll, true)
+
+	// Count applicable extra fields for this input
+	applicableExtraFields := 0
+	for _, ef := range d.InputExtraFields {
+		if shouldApplyExtraField(ef, inputName) {
+			applicableExtraFields++
+		}
+	}
+
+	if len(fields) == 0 && applicableExtraFields == 0 && !g.Config.IncludeEmptyTypes {
 		return "" // Skip empty inputs
 	}
 
 	buf.WriteString(fields)
 
-	// Add extra fields from @gqlExtraField annotations
-	for _, ef := range d.ExtraFields {
+	// Add extra fields from @gqlInputExtraField annotations
+	for _, ef := range d.InputExtraFields {
+		// Check if this field applies to this input
+		if !shouldApplyExtraField(ef, inputName) {
+			continue
+		}
 		if ef.Description != "" {
 			buf.WriteString(fmt.Sprintf("\t\"\"\"%s\"\"\"\n", ef.Description))
 		}
@@ -346,20 +380,20 @@ func (g *Generator) generateInput(typeSpec *ast.TypeSpec, st *ast.StructType, d 
 	return buf.String()
 }
 
-func (g *Generator) generateFields(st *ast.StructType, d StructDirectives, forInput bool) string {
+// generateFieldsForType generates fields with specific ignoreAll setting
+func (g *Generator) generateFieldsForType(st *ast.StructType, d StructDirectives, typeIgnoreAll bool, forInput bool) string {
 	buf := strings.Builder{}
 
 	// Determine which ignoreAll flag to use
-	ignoreAll := d.IgnoreAll
-	if forInput && d.InputIgnoreAll {
-		ignoreAll = true
-	} else if !forInput && d.TypeIgnoreAll {
-		ignoreAll = true
-	}
+	ignoreAll := d.IgnoreAll || typeIgnoreAll
 
 	for _, f := range st.Fields.List {
+		// Handle embedded fields
 		if f.Names == nil {
-			continue // Skip embedded fields
+			// This is an embedded field - expand its fields
+			embeddedFields := g.expandEmbeddedField(f, d, ignoreAll, forInput)
+			buf.WriteString(embeddedFields)
+			continue
 		}
 
 		opt := ParseFieldOptions(f, g.Config)
@@ -405,4 +439,57 @@ func (g *Generator) generateFields(st *ast.StructType, d StructDirectives, forIn
 	}
 
 	return buf.String()
+}
+
+// shouldApplyExtraField checks if an extra field should be applied to a given type/input name
+// based on the 'on' filter. Returns true if:
+// - On is empty (no filter specified, defaults to all)
+// - On contains "*" (explicitly apply to all)
+// - On contains the targetName
+func shouldApplyExtraField(ef ExtraField, targetName string) bool {
+	if len(ef.On) == 0 {
+		return true
+	}
+	for _, name := range ef.On {
+		if name == "*" || name == targetName {
+			return true
+		}
+	}
+	return false
+}
+
+// expandEmbeddedField recursively expands an embedded struct field into GraphQL fields
+func (g *Generator) expandEmbeddedField(f *ast.Field, d StructDirectives, ignoreAll bool, forInput bool) string {
+	// Get the type name of the embedded field
+	var typeName string
+	switch t := f.Type.(type) {
+	case *ast.Ident:
+		typeName = t.Name
+	case *ast.StarExpr:
+		// Handle pointer to embedded struct
+		if ident, ok := t.X.(*ast.Ident); ok {
+			typeName = ident.Name
+		}
+	case *ast.SelectorExpr:
+		// Handle embedded struct from another package (e.g., pkg.Type)
+		typeName = t.Sel.Name
+	}
+
+	if typeName == "" {
+		return "" // Unable to determine type name
+	}
+
+	// Look up the embedded struct in the parser
+	embeddedStruct, exists := g.P.Structs[typeName]
+	if !exists {
+		return "" // Embedded struct not found in parsed types
+	}
+
+	// Recursively generate fields for the embedded struct
+	// Create a minimal StructDirectives for the embedded type (no special directives)
+	embeddedDirectives := StructDirectives{
+		IgnoreAll: ignoreAll, // Inherit ignoreAll setting
+	}
+
+	return g.generateFieldsForType(embeddedStruct, embeddedDirectives, false, forInput)
 }

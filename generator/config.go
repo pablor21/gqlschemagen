@@ -23,8 +23,8 @@ const (
 
 // Config controls how the schema generator behaves
 type Config struct {
-	// Input directory to scan for Go structs (supports glob: /models/**/*.go)
-	Input string `yaml:"input"`
+	// Packages to scan for Go structs (supports glob: /models/**/*.go)
+	Packages []string `yaml:"packages"`
 
 	// Output directory or file path
 	Output string `yaml:"output"`
@@ -83,15 +83,6 @@ type Config struct {
 	// Include empty types (types with no fields)
 	IncludeEmptyTypes bool `yaml:"include_empty_types"`
 
-	// Directory to scan (deprecated, use Input)
-	PkgDir string `yaml:"pkg_dir"`
-
-	// Output directory (deprecated, use Output)
-	OutDir string `yaml:"out_dir"`
-
-	// Single file mode (deprecated, use GenStrategy)
-	SingleFile bool `yaml:"single_file"`
-
 	// Skip existing files
 	SkipExisting bool `yaml:"skip_existing"`
 
@@ -116,19 +107,8 @@ func NewConfig() *Config {
 
 // Normalize ensures config values are valid
 func (c *Config) Normalize() {
-	// Handle deprecated fields
-	if c.Input == "" && c.PkgDir != "" {
-		c.Input = c.PkgDir
-	}
-	if c.Output == "" && c.OutDir != "" {
-		c.Output = c.OutDir
-	}
 	if c.GenStrategy == "" {
-		if c.SingleFile {
-			c.GenStrategy = GenStrategySingle
-		} else {
-			c.GenStrategy = GenStrategyMultiple
-		}
+		c.GenStrategy = GenStrategyMultiple
 	}
 
 	// Set defaults
@@ -143,8 +123,8 @@ func (c *Config) Normalize() {
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
 	// Validate required fields
-	if c.Input == "" {
-		return fmt.Errorf("input path is required")
+	if len(c.Packages) == 0 {
+		return fmt.Errorf("packages is required (at least one package path must be specified)")
 	}
 
 	// Validate strategy

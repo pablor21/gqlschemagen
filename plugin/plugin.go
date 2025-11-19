@@ -161,7 +161,7 @@ func (p *Plugin) MutateConfig(cfg *config.Config) error {
 func (p *Plugin) generateSchema(pkgPath string) error {
 	// Clone config and set input
 	genCfg := *p.cfg
-	genCfg.Input = pkgPath
+	genCfg.Packages = []string{pkgPath}
 	genCfg.Output = filepath.Clean(genCfg.Output)
 
 	// Validate configuration
@@ -171,7 +171,7 @@ func (p *Plugin) generateSchema(pkgPath string) error {
 
 	// Parse Go package
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(genCfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(pkgPath)); err != nil {
 		return fmt.Errorf("parse error: %w", err)
 	}
 

@@ -6,31 +6,45 @@ import (
 	"strings"
 )
 
-// ExtraField represents a @gqlExtraField annotation
+// ExtraField represents a @gqlTypeExtraField or @gqlInputExtraField annotation
 type ExtraField struct {
 	Name         string
 	Type         string
 	OverrideTags string
 	Description  string
+	ForType      bool     // true if this is a @gqlTypeExtraField
+	ForInput     bool     // true if this is a @gqlInputExtraField
+	On           []string // list of type/input names this applies to, empty or ["*"] means all
+}
+
+// TypeDefinition represents a single @gqlType annotation
+type TypeDefinition struct {
+	Name        string // Custom type name
+	Description string // Type description
+	IgnoreAll   bool   // ignoreAll property
+}
+
+// InputDefinition represents a single @gqlInput annotation
+type InputDefinition struct {
+	Name        string // Custom input name
+	Description string // Input description
+	IgnoreAll   bool   // ignoreAll property
 }
 
 // StructDirectives holds parsed values from surrounding comments for a type
 type StructDirectives struct {
-	GQLName           string
-	GQLInput          string       // @gqlInput(name:"InputName",description:"desc")
-	GQLType           string       // @gqlType(name:"TypeName",description:"desc")
-	TypeDescription   string       // Description from @gqlType
-	InputDescription  string       // Description from @gqlInput
-	IgnoreAll         bool         // @gqlIgnoreAll
-	TypeIgnoreAll     bool         // ignoreAll property in @gqlType
-	InputIgnoreAll    bool         // ignoreAll property in @gqlInput
-	UseModelDirective bool         // @gqlUseModelDirective
-	SkipType          bool         // @gqlskip
-	GenInput          bool         // Generate input type
-	HasTypeDirective  bool         // Has @gqlType directive
-	HasInputDirective bool         // Has @gqlInput directive
-	Partial           bool         // @partial
-	ExtraFields       []ExtraField // @gqlExtraField (repeatable)
+	GQLName           string            // Default struct name
+	Types             []TypeDefinition  // All @gqlType annotations
+	Inputs            []InputDefinition // All @gqlInput annotations
+	IgnoreAll         bool              // @gqlIgnoreAll
+	UseModelDirective bool              // @gqlUseModelDirective
+	SkipType          bool              // @gqlskip
+	GenInput          bool              // Generate input type
+	HasTypeDirective  bool              // Has @gqlType directive
+	HasInputDirective bool              // Has @gqlInput directive
+	Partial           bool              // @partial
+	TypeExtraFields   []ExtraField      // @gqlTypeExtraField (repeatable)
+	InputExtraFields  []ExtraField      // @gqlInputExtraField (repeatable)
 }
 
 // ParseDirectives collects directives from GenDecl.Doc, TypeSpec.Doc and TypeSpec.Comment
@@ -63,35 +77,43 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 				line = strings.TrimSpace(line)
 
 				// @gqlType(name:"TypeName",description:"desc",ignoreAll:true)
-				if strings.HasPrefix(line, "@gqlType") {
+				if strings.HasPrefix(line, "@gqlType(") || line == "@gqlType" {
 					res.HasTypeDirective = true
 					params := parseDirectiveParams(line, "@gqlType")
+
+					typeDef := TypeDefinition{}
 					if name, ok := params["name"]; ok && name != "" {
-						res.GQLType = name
-						res.GQLName = name
+						typeDef.Name = name
+						if len(res.Types) == 0 {
+							res.GQLName = name
+						}
 					}
 					if desc, ok := params["description"]; ok {
-						res.TypeDescription = desc
+						typeDef.Description = desc
 					}
 					if ignoreAll, ok := params["ignoreAll"]; ok && (ignoreAll == "true" || ignoreAll == "1") {
-						res.TypeIgnoreAll = true
+						typeDef.IgnoreAll = true
 					}
+					res.Types = append(res.Types, typeDef)
 				}
 
 				// @gqlInput(name:"InputName",description:"desc",ignoreAll:true)
-				if strings.HasPrefix(line, "@gqlInput") {
+				if strings.HasPrefix(line, "@gqlInput(") || line == "@gqlInput" {
 					res.HasInputDirective = true
 					res.GenInput = true // Enable input generation
 					params := parseDirectiveParams(line, "@gqlInput")
+
+					inputDef := InputDefinition{}
 					if name, ok := params["name"]; ok && name != "" {
-						res.GQLInput = name
+						inputDef.Name = name
 					}
 					if desc, ok := params["description"]; ok {
-						res.InputDescription = desc
+						inputDef.Description = desc
 					}
 					if ignoreAll, ok := params["ignoreAll"]; ok && (ignoreAll == "true" || ignoreAll == "1") {
-						res.InputIgnoreAll = true
+						inputDef.IgnoreAll = true
 					}
+					res.Inputs = append(res.Inputs, inputDef)
 				} // @gqlIgnoreAll
 				if strings.HasPrefix(line, "@gqlIgnoreAll") || strings.HasPrefix(line, "@ignoreall") {
 					res.IgnoreAll = true
@@ -102,11 +124,11 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 					res.UseModelDirective = true
 				}
 
-				// @gqlExtraField(name:"fieldName",type:"FieldType",overrideTags:"tags",description:"desc")
-				if strings.HasPrefix(line, "@gqlExtraField") {
-					params := parseDirectiveParams(line, "@gqlExtraField")
+				// @gqlTypeExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")
+				if strings.HasPrefix(line, "@gqlTypeExtraField") {
+					params := parseDirectiveParams(line, "@gqlTypeExtraField")
 					if name, ok := params["name"]; ok && name != "" {
-						ef := ExtraField{Name: name}
+						ef := ExtraField{Name: name, ForType: true, ForInput: false}
 						if typ, ok := params["type"]; ok {
 							ef.Type = typ
 						}
@@ -116,8 +138,44 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 						if tags, ok := params["overrideTags"]; ok {
 							ef.OverrideTags = tags
 						}
+						if on, ok := params["on"]; ok {
+							ef.On = strings.Split(on, ",")
+							for i := range ef.On {
+								ef.On[i] = strings.TrimSpace(ef.On[i])
+							}
+						} else {
+							ef.On = []string{"*"}
+						}
 						if ef.Type != "" {
-							res.ExtraFields = append(res.ExtraFields, ef)
+							res.TypeExtraFields = append(res.TypeExtraFields, ef)
+						}
+					}
+				}
+
+				// @gqlInputExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")
+				if strings.HasPrefix(line, "@gqlInputExtraField") {
+					params := parseDirectiveParams(line, "@gqlInputExtraField")
+					if name, ok := params["name"]; ok && name != "" {
+						ef := ExtraField{Name: name, ForType: false, ForInput: true}
+						if typ, ok := params["type"]; ok {
+							ef.Type = typ
+						}
+						if desc, ok := params["description"]; ok {
+							ef.Description = desc
+						}
+						if tags, ok := params["overrideTags"]; ok {
+							ef.OverrideTags = tags
+						}
+						if on, ok := params["on"]; ok {
+							ef.On = strings.Split(on, ",")
+							for i := range ef.On {
+								ef.On[i] = strings.TrimSpace(ef.On[i])
+							}
+						} else {
+							ef.On = []string{"*"}
+						}
+						if ef.Type != "" {
+							res.InputExtraFields = append(res.InputExtraFields, ef)
 						}
 					}
 				}

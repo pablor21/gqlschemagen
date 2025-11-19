@@ -1,6 +1,12 @@
 # GraphQL Schema Generator
 
-A powerful, flexible GraphQL schema generator for Go projects that analyzes Go structs and generates GraphQL schema files with support for gqlgen directives, custom naming strategies, and extensive configuration options.
+A powerful, flexible GraphQL schema generator for Go projects that analyzes Go 
+structs and generates GraphQL schema files with support for [gqlgen](https://github.com/99designs/gqlgen) directives, 
+custom naming strategies, and extensive configuration options.
+
+
+FOR THE GQLGEN PLUGIN PLEASE SEE THE [PLUGIN DOCUMENTATION](plugin/README.md)
+
 
 ## Table of Contents
 
@@ -44,6 +50,9 @@ A powerful, flexible GraphQL schema generator for Go projects that analyzes Go s
 - 📚 **Field Descriptions**: Extract from struct tags or comments
 - ⚙️ **Highly Configurable**: CLI flags and per-struct customization
 - 🔌 **gqlgen Plugin**: Can be used as a standalone tool or [gqlgen](https://github.com/99designs/gqlgen) plugin
+- 🧩 **Embedded Struct Support**: Automatically expand embedded struct fields into parent types
+- ➕ **Extra Fields**: Add resolver-only fields to types and inputs with @gqlTypeExtraField and @gqlInputExtraField
+- 🌐 **Glob Pattern Support**: Scan packages using glob patterns like `**/models` or `internal/**/entities`
 
 ## Installation
 
@@ -379,19 +388,20 @@ type User @goModel(model: "your-package.User") {
 }
 ```
 
-#### `@gqlExtraField(name:"fieldName",type:"FieldType",description:"desc")`
-Add extra fields to the GraphQL schema that don't exist in the struct. Useful for fields that are only resolved at runtime. Can be used multiple times.
+#### `@gqlTypeExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")`
+Add extra fields only to GraphQL types (not inputs). Useful for resolver-only fields. Can be used multiple times.
 
 ```go
 /**
- * @gqlType()
- * @gqlExtraField(name:"fullName",type:"String!",description:"Computed full name")
- * @gqlExtraField(name:"avatar",type:"Avatar",description:"User avatar")
+ * @gqlType(name:"User")
+ * @gqlInput(name:"UserInput")
+ * @gqlTypeExtraField(name:"posts",type:"[Post!]!",description:"User's posts")
+ * @gqlTypeExtraField(name:"followers",type:"[User!]!",description:"Followers list")
  */
 type User struct {
-    ID        string
-    FirstName string
-    LastName  string
+    ID       string
+    Username string
+    Email    string
 }
 ```
 
@@ -399,25 +409,119 @@ Generates:
 ```graphql
 type User @goModel(model: "your-package.User") {
     id: ID!
-    firstName: String!
-    lastName: String!
-    """Computed full name"""
-    fullName: String! @goField(forceResolver: true)
-    """User avatar"""
-    avatar: Avatar @goField(forceResolver: true)
+    username: String!
+    email: String!
+    """User's posts"""
+    posts: [Post!]! @goField(forceResolver: true)
+    """Followers list"""
+    followers: [User!]! @goField(forceResolver: true)
+}
+
+input UserInput @goModel(model: "your-package.User") {
+    id: ID!
+    username: String!
+    email: String!
+    # Note: extra fields NOT included in input
 }
 ```
 
 **Parameters:**
 - `name` (required): Field name in the GraphQL schema
-- `type` (required): GraphQL type (e.g., `String!`, `[Post!]!`, `Avatar`)
+- `type` (required): GraphQL type (e.g., `String!`, `[Post!]!`, `User`)
 - `description` (optional): Field description
-- `overrideTags` (optional): Override struct tags (parsed but not currently used)
+- `on` (optional): Comma-separated list of type names to apply this field to. Defaults to `*` (all types)
+
+**Using the `on` parameter:**
+
+```go
+/**
+ * @gqlType(name:"Article")
+ * @gqlType(name:"BlogPost")
+ * @gqlTypeExtraField(name:"author",type:"User!",description:"Article author",on:"Article")
+ * @gqlTypeExtraField(name:"writer",type:"User!",description:"Blog writer",on:"BlogPost")
+ * @gqlTypeExtraField(name:"comments",type:"[Comment!]!",description:"Comments")
+ */
+type Content struct {
+    ID    string
+    Title string
+}
+```
+
+Generates:
+```graphql
+# Article type gets "author" and "comments" fields
+type Article {
+    id: ID!
+    title: String!
+    """Article author"""
+    author: User! @goField(forceResolver: true)
+    """Comments"""
+    comments: [Comment!]! @goField(forceResolver: true)
+}
+
+# BlogPost type gets "writer" and "comments" fields
+type BlogPost {
+    id: ID!
+    title: String!
+    """Blog writer"""
+    writer: User! @goField(forceResolver: true)
+    """Comments"""
+    comments: [Comment!]! @goField(forceResolver: true)
+}
+```
+
+#### `@gqlInputExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")`
+Add extra fields only to GraphQL inputs (not types). Useful for input-specific fields like passwords.
+
+```go
+/**
+ * @gqlType(name:"User")
+ * @gqlInput(name:"CreateUserInput")
+ * @gqlInput(name:"UpdateUserInput")
+ * @gqlInputExtraField(name:"password",type:"String!",description:"User password",on:"CreateUserInput")
+ */
+type User struct {
+    ID       string
+    Username string
+    Email    string
+}
+```
+
+Generates:
+```graphql
+type User {
+    id: ID!
+    username: String!
+    email: String!
+    # Note: password NOT in type
+}
+
+input CreateUserInput {
+    id: ID!
+    username: String!
+    email: String!
+    """User password"""
+    password: String!
+}
+
+input UpdateUserInput {
+    id: ID!
+    username: String!
+    email: String!
+    # Note: password NOT in UpdateUserInput (on:"CreateUserInput" only)
+}
+```
+
+**Parameters:**
+- `name` (required): Field name in the GraphQL schema
+- `type` (required): GraphQL type (e.g., `String!`, `ID`, `[String!]`)
+- `description` (optional): Field description
+- `on` (optional): Comma-separated list of input names to apply this field to. Defaults to `*` (all inputs)
 
 **Notes:**
-- Extra fields automatically get `@goField(forceResolver: true)` when gqlgen directives are enabled
-- These fields must be implemented as resolvers in your GraphQL server
-- Works with both types and inputs
+- Extra fields automatically get `@goField(forceResolver: true)` for types when gqlgen directives are enabled
+- The `on` parameter accepts `*` (all), specific type/input names, or comma-separated lists
+- These fields must be implemented as resolvers (for types) or handled in your input processing (for inputs)
 
 ### Field-level Struct Tags
 
@@ -527,7 +631,13 @@ go run github.com/pablor21/gqlschemagen generate --config custom.yml
 **Example gqlschemagen.yml:**
 
 ```yaml
-input: ./internal/domain/entities
+# List of packages to scan (supports glob patterns)
+packages: 
+    - ./internal/domain/entities
+    - ./internal/models
+    # Glob patterns are supported:
+    - ./internal/**/models     # All 'models' directories under 'internal'
+    - ./**/entities/*.go       # All .go files in 'entities' directories
 output: ./graph/schema/generated
 strategy: single
 field_case: camel
@@ -545,10 +655,17 @@ include_empty_types: false
 skip_existing: false
 ```
 
+**Package Path Patterns:**
+- **Direct paths**: `./internal/models` - scans all .go files in the directory
+- **Simple globs**: `./internal/*/models` - matches single-level wildcards
+- **Recursive globs**: `./internal/**/models` - matches any depth (recommended)
+- **File patterns**: `./**/entities/*.go` - matches specific files recursively
+
 **Notes:**
 - If the default `gqlschemagen.yml` doesn't exist, it's silently ignored
 - If a custom config file is specified but not found, an error is raised
 - CLI flags override values from the config file when explicitly set
+- Glob patterns are processed recursively for `**` patterns
 
 ### CLI Flags
 
@@ -1189,6 +1306,146 @@ type User struct {
     Date      time.Time `gql:"type:Date"`
 }
 ```
+
+### Embedded Struct Support
+
+The generator automatically expands embedded struct fields into the parent GraphQL type. This allows you to compose types from reusable components.
+
+#### Basic Embedded Structs
+
+```go
+// Base contains common fields
+type Base struct {
+    ID        string `json:"id"`
+    CreatedAt string `json:"created_at"`
+    UpdatedAt string `json:"updated_at"`
+}
+
+/**
+ * @gqlType(name:"Article")
+ */
+type Article struct {
+    Base           // Embedded struct - fields will be expanded
+    Title   string `json:"title"`
+    Content string `json:"content"`
+    Author  string `json:"author"`
+}
+```
+
+**Generated:**
+```graphql
+type Article {
+    id: String!
+    created_at: String!
+    updated_at: String!
+    title: String!
+    content: String!
+    author: String!
+}
+```
+
+#### Multiple Embedded Structs
+
+You can embed multiple structs in a single type:
+
+```go
+// Timestamped provides timestamp fields
+type Timestamped struct {
+    CreatedAt string `json:"created_at"`
+    UpdatedAt string `json:"updated_at"`
+}
+
+// Identifiable provides ID field
+type Identifiable struct {
+    ID string `json:"id"`
+}
+
+/**
+ * @gqlType(name:"BlogPost")
+ * @gqlInput(name:"BlogPostInput")
+ */
+type BlogPost struct {
+    Identifiable // Embedded - ID field will be included
+    Timestamped  // Embedded - CreatedAt and UpdatedAt will be included
+    Title        string `json:"title"`
+    Body         string `json:"body"`
+    Published    bool   `json:"published"`
+}
+```
+
+**Generated:**
+```graphql
+type BlogPost {
+    id: String!
+    created_at: String!
+    updated_at: String!
+    title: String!
+    body: String!
+    published: Boolean!
+}
+
+input BlogPostInput {
+    id: String!
+    created_at: String!
+    updated_at: String!
+    title: String!
+    body: String!
+    published: Boolean!
+}
+```
+
+#### Embedded Structs with Field Annotations
+
+Field annotations on embedded struct fields are preserved:
+
+```go
+// Metadata provides metadata fields
+type Metadata struct {
+    /**
+     * @gqlField(description:"Tags for categorization")
+     */
+    Tags []string `json:"tags"`
+    /**
+     * @gqlField(name:"viewCount",description:"Number of views")
+     */
+    Views int `json:"views"`
+}
+
+/**
+ * @gqlType(name:"ContentWithMetadata",description:"Content with embedded metadata")
+ */
+type ContentWithMetadata struct {
+    Base
+    Metadata
+    Title       string `json:"title"`
+    Description string `json:"description"`
+}
+```
+
+**Generated:**
+```graphql
+"""Content with embedded metadata"""
+type ContentWithMetadata {
+    id: String!
+    created_at: String!
+    updated_at: String!
+    """Tags for categorization"""
+    tags: [String!]!
+    """Number of views"""
+    viewCount: Int!
+    title: String!
+    description: String!
+}
+```
+
+#### Notes on Embedded Structs
+
+- Embedded struct fields are recursively expanded into the parent type
+- All field annotations (`@gqlField`, struct tags) on embedded fields are respected
+- Field naming rules (case transformation, JSON tags) apply to embedded fields
+- Embedded structs themselves don't need GraphQL annotations
+- Only embedded structs found in the scanned packages are expanded
+- Pointer embedded structs (`*Base`) are also supported
 
 ## Integration with gqlgen
 

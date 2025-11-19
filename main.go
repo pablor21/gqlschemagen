@@ -217,7 +217,7 @@ func generateCommand(args []string) {
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "pkg", "p":
-			cfg.Input = *pkg
+			cfg.Packages = []string{*pkg}
 		case "out", "o":
 			cfg.Output = *out
 		case "strategy", "s":
@@ -251,6 +251,9 @@ func generateCommand(args []string) {
 		}
 	})
 
+	// Normalize configuration
+	cfg.Normalize()
+
 	// Set default output based on strategy if not specified
 	if cfg.Output == "" {
 		if cfg.GenStrategy == generator.GenStrategySingle {
@@ -268,9 +271,12 @@ func generateCommand(args []string) {
 		log.Fatalf("config validation error: %v", err)
 	}
 
+	// Parse all packages
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
-		log.Fatalf("parse error: %v", err)
+	for _, pkgPath := range cfg.Packages {
+		if err := parser.Walk(generator.PkgDir(pkgPath)); err != nil {
+			log.Fatalf("parse error for package %s: %v", pkgPath, err)
+		}
 	}
 
 	engine := generator.NewGenerator(parser, cfg)

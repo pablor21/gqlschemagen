@@ -1,6 +1,8 @@
-# gqlschemagen Plugin for gqlgen
+# Schema Generator Plugin for gqlgen
 
 A gqlgen plugin that automatically generates GraphQL schemas from Go structs with special annotations.
+
+FOR THE SCHEMA GENERATION TOOL PLEASE SEE THE [MAIN DOCUMENTATION](../README.md)
 
 ## Installation
 

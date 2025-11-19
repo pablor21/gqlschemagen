@@ -165,7 +165,7 @@ type DBProduct struct {
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		StripPrefix:         "DB,Pg",
@@ -178,7 +178,7 @@ type DBProduct struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -269,7 +269,7 @@ type SecureUser struct {
 
 	// Create config with useJsonTag enabled
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          true,
@@ -278,7 +278,7 @@ type SecureUser struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -364,7 +364,7 @@ type User struct {
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          true,
@@ -374,7 +374,7 @@ type User struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -456,7 +456,7 @@ type SecureUser struct {
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          true,
@@ -465,7 +465,7 @@ type SecureUser struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -555,7 +555,7 @@ type User struct {
 
 	// Create config with custom ModelPath
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          true,
@@ -565,7 +565,7 @@ type User struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -624,7 +624,7 @@ type UpdateUser struct {
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          true,
@@ -633,7 +633,7 @@ type UpdateUser struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -731,7 +731,7 @@ type Post struct {
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          false,
@@ -741,7 +741,7 @@ type Post struct {
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
@@ -801,19 +801,19 @@ type Post struct {
 	}
 }
 
-// TestExtraFieldDirective tests that @gqlExtraField annotation adds extra fields to the schema
-func TestExtraFieldDirective(t *testing.T) {
+// Test that extra fields are generated correctly
+func TestTypeExtraFieldDirectives(t *testing.T) {
 	// Create temp directory for test files
 	tmpDir := t.TempDir()
 
-	// Create test Go file with @gqlExtraField annotations
+	// Create test Go file with @gqlTypeExtraField annotations
 	testFile := filepath.Join(tmpDir, "user.go")
 	testContent := `package test
 
 /**
  * @gqlType()
- * @gqlExtraField(name:"fullName",type:"String!",description:"Computed full name")
- * @gqlExtraField(name:"avatar",type:"Avatar",description:"User avatar")
+ * @gqlTypeExtraField(name:"fullName",type:"String!",description:"Computed full name")
+ * @gqlTypeExtraField(name:"avatar",type:"Avatar",description:"User avatar")
  */
 type User struct {
 ID        string
@@ -829,7 +829,7 @@ LastName  string
 
 	// Create config
 	cfg := &generator.Config{
-		Input:               tmpDir,
+		Packages:            []string{tmpDir},
 		Output:              outFile,
 		GenStrategy:         generator.GenStrategySingle,
 		UseJsonTag:          false,
@@ -839,7 +839,7 @@ LastName  string
 
 	// Run generator
 	parser := generator.NewParser()
-	if err := parser.Walk(generator.PkgDir(cfg.Input)); err != nil {
+	if err := parser.Walk(generator.PkgDir(tmpDir)); err != nil {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
