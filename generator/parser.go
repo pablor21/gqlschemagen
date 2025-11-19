@@ -245,30 +245,27 @@ func appendIfMissing(list []string, v string) []string {
 }
 
 // GetPackageImportPath returns the full import path for a type
-// If modelPath is provided, it constructs the path relative to it
+// If modelPath is provided and looks like a complete path, use it directly
+// Otherwise, try to build the path by analyzing the file structure
 func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string {
+	pkgName := p.PackageNames[typeName]
+
 	if modelPath == "" {
 		// Just return package name if no model path configured
-		return p.PackageNames[typeName]
+		return pkgName
 	}
 
 	filePath, ok := p.PackagePaths[typeName]
 	if !ok {
-		return p.PackageNames[typeName]
+		// No file path info, just use modelPath directly
+		return modelPath
 	}
 
 	// Get the directory of the file
 	dir := filepath.ToSlash(filepath.Dir(filePath))
-
-	// The file path is absolute or relative from where the tool was run
-	// We need to extract the package path from the directory structure
-
-	// Strategy: Look for the package directory and its parent directories
-	// Start from the file's directory and work backwards to build the import path
 	parts := strings.Split(dir, "/")
 
 	// Find the index where the package name appears
-	pkgName := p.PackageNames[typeName]
 	pkgIndex := -1
 	for i := len(parts) - 1; i >= 0; i-- {
 		if parts[i] == pkgName {
@@ -278,45 +275,41 @@ func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string 
 	}
 
 	if pkgIndex == -1 {
-		// Fallback: just append package name
-		return modelPath + "/" + pkgName
+		// Package directory not found in path, use modelPath as-is
+		return modelPath
 	}
 
-	// Build the import path from the package directory and any parent directories
-	// that are part of the module structure (not going beyond common paths like src, internal, pkg, etc.)
-	var importParts []string
+	// Check if there are meaningful parent directories between module root and package
+	// Look for structure like: internal/models, pkg/entities, api/v2/models, etc.
+	var subPath []string
 
-	// Work backwards from pkgIndex to collect relevant path components
+	// Collect directories from package backward until we hit a likely module boundary
 	for i := pkgIndex; i >= 0; i-- {
 		part := parts[i]
 
-		// Skip common irrelevant directories
-		if part == "." || part == ".." || part == "" {
+		// Skip empty parts
+		if part == "" || part == "." || part == ".." {
 			continue
 		}
 
-		// Stop at common workspace roots (but include them if they're meaningful)
-		// Include: internal, pkg, cmd, api, etc.
-		// Stop at: src (unless it's meaningful), workspace root indicators
+		subPath = append([]string{part}, subPath...)
 
-		importParts = append([]string{part}, importParts...)
-
-		// Stop if we hit a likely module root indicator
-		// But continue collecting if we see internal, pkg, cmd, api, etc.
-		if i < len(parts)-1 {
-			// Check if this could be a module structure path
-			if part != "internal" && part != "pkg" && part != "cmd" && part != "api" &&
-				part != "models" && part != "entities" && part != "domain" {
-				// Might be at module root, but keep the current directory
-				break
-			}
+		// Stop if we hit common module structure markers (but include them)
+		if part == "internal" || part == "pkg" || part == "cmd" || part == "api" {
+			break
 		}
 	}
 
-	// Join with model path
-	if len(importParts) > 0 {
-		return modelPath + "/" + strings.Join(importParts, "/")
+	// If we only have the package name itself, return modelPath as-is
+	// This handles cases where modelPath already points to the complete package location
+	if len(subPath) == 1 && subPath[0] == pkgName {
+		return modelPath
 	}
 
-	return modelPath + "/" + pkgName
+	// Otherwise, append the sub-path to modelPath
+	if len(subPath) > 0 {
+		return modelPath + "/" + strings.Join(subPath, "/")
+	}
+
+	return modelPath
 }
