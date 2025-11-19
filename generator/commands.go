@@ -56,6 +56,9 @@ func Generate(cfg *Config) error {
 		}
 	}
 
+	// Match enum constants after all packages are parsed (supports cross-package enums)
+	parser.MatchEnumConstants()
+
 	// Generate schema
 	engine := NewGenerator(parser, cfg)
 	if err := engine.Run(); err != nil {

@@ -18,6 +18,8 @@ type EnumValue struct {
 	Value       interface{} // The actual value (string literal or int)
 	Description string      // From comment
 	Deprecated  string      // Deprecation reason if any
+	PackagePath string      // Full import path where this const is defined
+	PackageName string      // Package name where this const is defined
 }
 
 // EnumType represents a Go enum type
@@ -43,16 +45,22 @@ type Parser struct {
 	// Enum support
 	EnumTypes map[string]*EnumType
 	EnumNames []string // ordered list for deterministic output
+	// Enum candidates collected across all files before matching
+	enumCandidates map[string]*enumCandidate
+	// Const blocks collected for later matching to enum types
+	constBlocks []*constBlockInfo
 }
 
 func NewParser() *Parser {
 	return &Parser{
-		StructTypes:  make(map[string]*ast.TypeSpec),
-		Structs:      make(map[string]*ast.StructType),
-		PackageNames: make(map[string]string),
-		PackagePaths: make(map[string]string),
-		TypeToDecl:   make(map[string]*ast.GenDecl),
-		EnumTypes:    make(map[string]*EnumType),
+		StructTypes:    make(map[string]*ast.TypeSpec),
+		Structs:        make(map[string]*ast.StructType),
+		PackageNames:   make(map[string]string),
+		PackagePaths:   make(map[string]string),
+		TypeToDecl:     make(map[string]*ast.GenDecl),
+		EnumTypes:      make(map[string]*EnumType),
+		enumCandidates: make(map[string]*enumCandidate),
+		constBlocks:    make([]*constBlockInfo, 0),
 	}
 }
 
@@ -72,13 +80,18 @@ func (p *Parser) Walk(root string) error {
 	// If it's a file, parse it directly
 	if !info.IsDir() {
 		if strings.HasSuffix(root, ".go") && !strings.HasSuffix(root, "_test.go") {
-			return p.parseFile(root)
+			if err := p.parseFile(root); err != nil {
+				return err
+			}
 		}
-		return nil
+	} else {
+		// If it's a directory, recursively scan all Go files
+		if err := p.walkDir(root); err != nil {
+			return err
+		}
 	}
 
-	// If it's a directory, recursively scan all Go files
-	return p.walkDir(root)
+	return nil
 }
 
 func (p *Parser) walkDir(root string) error {
@@ -107,8 +120,6 @@ func (p *Parser) parseFile(path string) error {
 	pkgName := f.Name.Name
 
 	// First pass: collect type declarations (structs and potential enums)
-	enumCandidates := make(map[string]*enumCandidate) // type name -> candidate info
-
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok {
@@ -138,7 +149,8 @@ func (p *Parser) parseFile(path string) error {
 				if hasGqlEnumDirective(genDecl) {
 					baseType := getBaseTypeName(t.Type)
 					if baseType == "string" || baseType == "int" {
-						enumCandidates[t.Name.Name] = &enumCandidate{
+						// Store enum candidate for later matching
+						p.enumCandidates[t.Name.Name] = &enumCandidate{
 							TypeSpec: t,
 							GenDecl:  genDecl,
 							BaseType: baseType,
@@ -151,14 +163,19 @@ func (p *Parser) parseFile(path string) error {
 		}
 	}
 
-	// Second pass: find const blocks that define enum values
+	// Second pass: collect const blocks for later matching
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
 
-		p.parseConstBlock(genDecl, enumCandidates, fset)
+		// Store const block info for later matching
+		p.constBlocks = append(p.constBlocks, &constBlockInfo{
+			GenDecl:  genDecl,
+			PkgName:  pkgName,
+			FilePath: path,
+		})
 	}
 
 	return nil
@@ -171,6 +188,13 @@ type enumCandidate struct {
 	BaseType string // "string" or "int"
 	PkgName  string
 	FilePath string
+}
+
+// constBlockInfo holds info about a const block for later matching to enum types
+type constBlockInfo struct {
+	GenDecl  *ast.GenDecl
+	PkgName  string
+	FilePath string // File path where this const block is defined
 }
 
 func appendIfMissing(list []string, v string) []string {
@@ -252,6 +276,66 @@ func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string 
 	return modelPath
 }
 
+// GetPackageImportPathFromFile builds the import path from a file path and package name
+func (p *Parser) GetPackageImportPathFromFile(filePath string, pkgName string, modelPath string) string {
+	if modelPath == "" {
+		// Just return package name if no model path configured
+		return pkgName
+	}
+
+	// Get the directory of the file
+	dir := filepath.ToSlash(filepath.Dir(filePath))
+	parts := strings.Split(dir, "/")
+
+	// Find the index where the package name appears
+	pkgIndex := -1
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] == pkgName {
+			pkgIndex = i
+			break
+		}
+	}
+
+	if pkgIndex == -1 {
+		// Package directory not found in path, use modelPath as-is
+		return modelPath
+	}
+
+	// Check if there are meaningful parent directories between module root and package
+	// Look for structure like: internal/models, pkg/entities, api/v2/models, etc.
+	var subPath []string
+
+	// Collect directories from package backward until we hit a likely module boundary
+	for i := pkgIndex; i >= 0; i-- {
+		part := parts[i]
+
+		// Skip empty parts
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+
+		subPath = append([]string{part}, subPath...)
+
+		// Stop if we hit common module structure markers (but include them)
+		if part == "internal" || part == "pkg" || part == "cmd" || part == "api" {
+			break
+		}
+	}
+
+	// If we only have the package name itself, return modelPath as-is
+	// This handles cases where modelPath already points to the complete package location
+	if len(subPath) == 1 && subPath[0] == pkgName {
+		return modelPath
+	}
+
+	// Otherwise, append the sub-path to modelPath
+	if len(subPath) > 0 {
+		return modelPath + "/" + strings.Join(subPath, "/")
+	}
+
+	return modelPath
+}
+
 // hasGqlEnumDirective checks if a GenDecl has @gqlEnum directive in its doc comments
 func hasGqlEnumDirective(decl *ast.GenDecl) bool {
 	if decl.Doc == nil {
@@ -276,7 +360,9 @@ func getBaseTypeName(expr ast.Expr) string {
 }
 
 // parseConstBlock parses a const block and matches values to enum candidates
-func (p *Parser) parseConstBlock(genDecl *ast.GenDecl, enumCandidates map[string]*enumCandidate, fset *token.FileSet) {
+func (p *Parser) parseConstBlock(constBlock *constBlockInfo, enumCandidates map[string]*enumCandidate) {
+	genDecl := constBlock.GenDecl
+
 	if len(genDecl.Specs) == 0 {
 		return
 	}
@@ -293,9 +379,20 @@ func (p *Parser) parseConstBlock(genDecl *ast.GenDecl, enumCandidates map[string
 
 		// Get the type from the first const that has an explicit type
 		if valueSpec.Type != nil {
-			if ident, ok := valueSpec.Type.(*ast.Ident); ok {
-				enumTypeName = ident.Name
-				if candidate, exists := enumCandidates[enumTypeName]; exists {
+			// Handle both qualified (pkg.Type) and unqualified (Type) names
+			var typeName string
+			switch t := valueSpec.Type.(type) {
+			case *ast.Ident:
+				// Unqualified type: Status
+				typeName = t.Name
+			case *ast.SelectorExpr:
+				// Qualified type: types.Status or pkg.Status
+				typeName = t.Sel.Name
+			}
+
+			if typeName != "" {
+				if candidate, exists := enumCandidates[typeName]; exists {
+					enumTypeName = typeName
 					enumType = candidate.BaseType
 					break
 				}
@@ -345,6 +442,8 @@ func (p *Parser) parseConstBlock(genDecl *ast.GenDecl, enumCandidates map[string
 				Value:       value,
 				Description: description,
 				Deprecated:  deprecated,
+				PackagePath: constBlock.FilePath,
+				PackageName: constBlock.PkgName,
 			})
 
 			iotaValue++
@@ -370,6 +469,15 @@ func (p *Parser) parseConstBlock(genDecl *ast.GenDecl, enumCandidates map[string
 		p.EnumNames = appendIfMissing(p.EnumNames, enumTypeName)
 		p.PackageNames[enumTypeName] = candidate.PkgName
 		p.PackagePaths[enumTypeName] = candidate.FilePath
+	}
+}
+
+// MatchEnumConstants matches all collected const blocks to enum candidates
+// This should be called after all packages have been parsed to support cross-file and cross-package enums
+func (p *Parser) MatchEnumConstants() {
+	// Process all collected const blocks
+	for _, constBlock := range p.constBlocks {
+		p.parseConstBlock(constBlock, p.enumCandidates)
 	}
 }
 

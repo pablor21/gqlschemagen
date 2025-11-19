@@ -804,7 +804,30 @@ type User {
 - For int enums, only the names are used in GraphQL (numeric values are a Go implementation detail)
 - gqlgen will automatically handle the Go ↔ GraphQL enum conversion
 - Enums must have at least one const value to be generated
-- The const block must immediately follow the type declaration
+- Const values must have explicit type annotations (e.g., `RoleAdmin UserRole = "ADMIN"`)
+- Enum types and their const values can be in different files or even different packages
+
+**Cross-package enum example:**
+
+```go
+// types/status.go
+package types
+
+// @gqlEnum
+type Status string
+
+// constants/status_values.go  
+package constants
+
+import "yourproject/types"
+
+const (
+	StatusPending  types.Status = "PENDING"
+	StatusActive   types.Status = "ACTIVE"
+	StatusComplete types.Status = "COMPLETE"
+)
+```
+ 
 
 ### Field-level Struct Tags
 

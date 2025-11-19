@@ -37,6 +37,12 @@ const (
 		t.Fatalf("Walk() error = %v", err)
 	}
 
+	// Match enum constants
+	parser.MatchEnumConstants()
+
+	// Check enum was parsed
+	parser.MatchEnumConstants()
+
 	// Check that enum was parsed
 	if len(parser.EnumNames) != 1 {
 		t.Errorf("Expected 1 enum, got %d", len(parser.EnumNames))
@@ -126,6 +132,9 @@ const (
 		t.Fatalf("Walk() error = %v", err)
 	}
 
+	// Match enum constants
+	parser.MatchEnumConstants()
+
 	enumType, exists := parser.EnumTypes["Permission"]
 	if !exists {
 		t.Fatal("Permission enum not found")
@@ -175,6 +184,9 @@ const (
 		t.Fatalf("Walk() error = %v", err)
 	}
 
+	// Match enum constants
+	parser.MatchEnumConstants()
+
 	enumType, exists := parser.EnumTypes["Status"]
 	if !exists {
 		t.Fatal("Status enum not found")
@@ -215,6 +227,9 @@ const (
 	if err := parser.Walk(tmpDir); err != nil {
 		t.Fatalf("Walk() error = %v", err)
 	}
+
+	// Match enum constants
+	parser.MatchEnumConstants()
 
 	enumType, exists := parser.EnumTypes["Color"]
 	if !exists {
@@ -288,6 +303,9 @@ const (
 	if err := parser.Walk(tmpDir); err != nil {
 		t.Fatalf("Walk() error = %v", err)
 	}
+
+	// Match enum constants
+	parser.MatchEnumConstants()
 
 	// Check UserRole has custom name
 	userRoleEnum, exists := parser.EnumTypes["UserRole"]

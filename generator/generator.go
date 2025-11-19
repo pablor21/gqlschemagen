@@ -576,8 +576,16 @@ func (g *Generator) generateEnum(enumType *EnumType) string {
 
 		// Add @goEnum directive if gqlgen directives are enabled
 		if g.Config.UseGqlGenDirectives {
-			pkgPath := g.P.GetPackageImportPath(enumType.GoTypeName, g.Config.ModelPath)
-			buf.WriteString(fmt.Sprintf(" @goEnum(value: \"%s.%s\")", pkgPath, value.GoName))
+			// Use the package path where the const value is defined, not where the type is defined
+			var valuePkgPath string
+			if value.PackagePath != "" {
+				// Use the stored package info for this specific const value
+				valuePkgPath = g.P.GetPackageImportPathFromFile(value.PackagePath, value.PackageName, g.Config.ModelPath)
+			} else {
+				// Fallback to using the enum type's package (for backwards compatibility)
+				valuePkgPath = g.P.GetPackageImportPath(enumType.GoTypeName, g.Config.ModelPath)
+			}
+			buf.WriteString(fmt.Sprintf(" @goEnum(value: \"%s.%s\")", valuePkgPath, value.GoName))
 		}
 
 		// Add deprecated directive if present
