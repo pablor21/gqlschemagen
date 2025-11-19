@@ -28,6 +28,7 @@ custom naming strategies, and extensive configuration options.
   - [CLI Flags](#cli-flags)
   - [Field Case Transformations](#field-case-transformations)
   - [Using JSON Tags](#using-json-tags)
+  - [Keeping Schema Modifications](#keep-sections)
 - [Examples](#examples)
 - [Integration with gqlgen](#integration-with-gqlgen)
 - [Advanced Usage](#advanced-usage)
@@ -53,7 +54,6 @@ custom naming strategies, and extensive configuration options.
 - ⚙️ **Highly Configurable**: CLI flags and per-struct customization
 - 🧩 **Embedded Struct Support**: Automatically expand embedded struct fields into parent types
 - ➕ **Extra Fields**: Add resolver-only fields to types and inputs with @gqlTypeExtraField and @gqlInputExtraField
-- 🌐 **Glob Pattern Support**: Scan packages using glob patterns like `**/models` or `internal/**/entities`
 
 ## Installation
 
@@ -742,13 +742,9 @@ go run github.com/pablor21/gqlschemagen generate --config custom.yml
 **Example gqlschemagen.yml:**
 
 ```yaml
-# List of packages to scan (supports glob patterns)
 packages: 
     - ./internal/domain/entities
     - ./internal/models
-    # Glob patterns are supported:
-    - ./internal/**/models     # All 'models' directories under 'internal'
-    - ./**/entities/*.go       # All .go files in 'entities' directories
 output: ./graph/schema/generated
 strategy: single
 field_case: camel
@@ -766,17 +762,10 @@ include_empty_types: false
 skip_existing: false
 ```
 
-**Package Path Patterns:**
-- **Direct paths**: `./internal/models` - scans all .go files in the directory
-- **Simple globs**: `./internal/*/models` - matches single-level wildcards
-- **Recursive globs**: `./internal/**/models` - matches any depth (recommended)
-- **File patterns**: `./**/entities/*.go` - matches specific files recursively
-
 **Notes:**
 - If the default `gqlschemagen.yml` doesn't exist, it's silently ignored
 - If a custom config file is specified but not found, an error is raised
 - CLI flags override values from the config file when explicitly set
-- Glob patterns are processed recursively for `**` patterns
 
 ### CLI Flags
 
@@ -943,6 +932,29 @@ type SecureUser {
 - `json:"-"` is only respected when `-use-json-tag=true`
 - `gql:"include"` overrides `json:"-"` behavior
 - Priority: `gql` tag > `json` tag > struct field name
+
+### Keeping Schema Modifications
+
+**You can preserve manual modifications in generated schema files by using special markers:**
+
+```graphql
+# @gqlKeepBegin
+# Your custom schema modifications here
+# @gqlKeepEnd
+```
+Anything between `# @gqlKeepBegin` and `# @gqlKeepEnd` will be preserved during regeneration.
+
+You can place these markers anywhere in the generated schema file. The generator will retain the content between them when regenerating the schema.
+
+It's possiblle to set the placement of the code to be kept using the configuration file:
+```yaml
+
+# GQLKeep preserved sections markers
+# Placement of the preserved sections (options: "start", "end")
+keep_section_placement: "end"
+keep_begin_marker: "# @gqlKeepBegin"
+keep_end_marker: "# @gqlKeepEnd"
+```
 
 ## Examples
 

@@ -2,7 +2,6 @@
 # Configuration for generating GraphQL schemas from Go structs
 
 # Packages to scan for Go structs with gql annotations (required)
-# Supports glob patterns like ./models/**/*.go
 packages:
    - ./
 
@@ -53,3 +52,9 @@ skip_existing: false
 
 # Automatically generate input types
 gen_inputs: true
+
+# GQLKeep preserved sections markers
+# Placement of the preserved sections (options: "start", "end")
+keep_section_placement: "end"
+keep_begin_marker: "# @gqlKeepBegin"
+keep_end_marker: "# @gqlKeepEnd"

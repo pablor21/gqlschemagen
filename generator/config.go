@@ -91,6 +91,11 @@ type Config struct {
 
 	// Generate empty structs
 	GenerateEmptyStructs bool `yaml:"generate_empty_structs"`
+
+	// GQLKeep preserved sections marker
+	KeepBeginMarker      string `yaml:"keep_begin_marker"`
+	KeepEndMarker        string `yaml:"keep_end_marker"`
+	KeepSectionPlacement string `yaml:"keep_section_placement"`
 }
 
 // NewConfig creates a new Config with defaults
@@ -118,6 +123,18 @@ func (c *Config) Normalize() {
 	if c.SchemaFileName == "" {
 		c.SchemaFileName = "{model_name}.graphqls"
 	}
+
+	if c.KeepBeginMarker == "" {
+		c.KeepBeginMarker = "# @gqlKeepBegin"
+	}
+	if c.KeepEndMarker == "" {
+		c.KeepEndMarker = "# @gqlKeepEnd"
+	}
+
+	if c.KeepSectionPlacement == "" {
+		c.KeepSectionPlacement = "end"
+	}
+
 }
 
 // Validate checks if the configuration is valid
@@ -136,6 +153,10 @@ func (c *Config) Validate() error {
 	if c.FieldCase != "" && c.FieldCase != FieldCaseCamel && c.FieldCase != FieldCaseSnake &&
 		c.FieldCase != FieldCasePascal && c.FieldCase != FieldCaseOriginal && c.FieldCase != FieldCaseNone {
 		return fmt.Errorf("invalid field-case: %s (must be 'camel', 'snake', 'pascal', 'original', or 'none')", c.FieldCase)
+	}
+
+	if c.KeepSectionPlacement != "start" && c.KeepSectionPlacement != "end" {
+		return fmt.Errorf("invalid keep_section_placement: %s (must be 'start' or 'end')", c.KeepSectionPlacement)
 	}
 
 	return nil
