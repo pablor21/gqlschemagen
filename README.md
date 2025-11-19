@@ -2,14 +2,11 @@
 [![GitHub release](https://img.shields.io/github/release/pablor21/gqlschemagen.svg?v0.1.0)](https://img.shields.io/github/release/pablor21/gqlschemagen.svg?v0.1.0)
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/pablor21/gqlschemagen/master/LICENSE)
 
-
-
 # GraphQL Schema Generator
 
 A powerful, flexible GraphQL schema generator for Go projects that analyzes Go 
 structs and generates GraphQL schema files with support for [gqlgen](https://github.com/99designs/gqlgen) directives, 
 custom naming strategies, and extensive configuration options.
-
 
 ## Table of Contents
 
