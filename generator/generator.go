@@ -267,11 +267,8 @@ func (g *Generator) generateTypeFromDef(typeSpec *ast.TypeSpec, st *ast.StructTy
 
 	// Add @goModel directive if enabled
 	if g.Config.UseGqlGenDirectives || d.UseModelDirective {
-		pkgName := g.P.PackageNames[typeSpec.Name.Name]
-		if g.Config.ModelPath != "" {
-			pkgName = g.Config.ModelPath
-		}
-		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgName, typeSpec.Name.Name))
+		pkgPath := g.P.GetPackageImportPath(typeSpec.Name.Name, g.Config.ModelPath)
+		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgPath, typeSpec.Name.Name))
 	}
 
 	buf.WriteString(" {\n")
@@ -342,11 +339,8 @@ func (g *Generator) generateInputFromDef(typeSpec *ast.TypeSpec, st *ast.StructT
 
 	// Add @goModel directive if enabled
 	if g.Config.UseGqlGenDirectives || d.UseModelDirective {
-		pkgName := g.P.PackageNames[typeSpec.Name.Name]
-		if g.Config.ModelPath != "" {
-			pkgName = g.Config.ModelPath
-		}
-		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgName, typeSpec.Name.Name))
+		pkgPath := g.P.GetPackageImportPath(typeSpec.Name.Name, g.Config.ModelPath)
+		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgPath, typeSpec.Name.Name))
 	}
 
 	buf.WriteString(" {\n")
