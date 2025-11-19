@@ -1,3 +1,9 @@
+[![GoDoc](https://godoc.org/github.com/pablor21/gqlschemagen/plugin?status.svg)](https://godoc.org/github.com/pablor21/gqlschemagen/plugin)
+[![GitHub release](https://img.shields.io/github/release/pablor21/gqlschemagen/plugin.svg?v0.1.0)](https://img.shields.io/github/release/pablor21/gqlschemagen/plugin.svg?v0.1.0)
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/pablor21/gqlschemagen/master/LICENSE)
+
+
+
 # Schema Generator Plugin for gqlgen
 
 A gqlgen plugin that automatically generates GraphQL schemas from Go structs with special annotations.
