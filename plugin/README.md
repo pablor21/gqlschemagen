@@ -28,6 +28,18 @@ This gives you precise control over what gets generated from your Go models.
 
 ## Usage
 
+### Important: Schema Generation Order
+
+**The schemas MUST be generated BEFORE loading the gqlgen config.** 
+
+When gqlgen loads its configuration, it validates that all referenced schema files exist and are valid. If you try to use `api.AddPlugin()`, gqlgen will attempt to load and validate schemas before the plugin has a chance to generate them, resulting in errors like:
+
+```
+failed to load schema: graph/schema.graphqls:24:40: Undefined type User.
+```
+
+**Solution:** Call `plugin.GenerateSchemas()` before `config.LoadConfigFromDefaultLocations()`.
+
 ### 1. Create a Custom Code Generation Entrypoint
 
 Create a file named `generate.go` in your project root (same directory as `gqlgen.yml`):
@@ -48,20 +60,30 @@ import (
 )
 
 func main() {
+	// FIRST: Load plugin config and generate schemas
+	// This must happen BEFORE loading gqlgen config because
+	// gqlgen validates schemas during config loading
+	p, err := plugin.LoadConfigFromFile("gqlschemagen.yml")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to load gqlschemagen config", err.Error())
+		os.Exit(2)
+	}
+
+	// Generate GraphQL schemas from Go structs
+	if err := p.GenerateSchemas(); err != nil {
+		fmt.Fprintln(os.Stderr, "failed to generate schemas", err.Error())
+		os.Exit(2)
+	}
+
+	// NOW: Load gqlgen config (schemas are now available)
 	cfg, err := config.LoadConfigFromDefaultLocations()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "failed to load config", err.Error())
 		os.Exit(2)
 	}
 
-	// Create and configure the gqlschemagen plugin
-	p := plugin.New()
-	p.Packages = []string{
-		"./graph/models",  // Scan this directory for Go structs
-	}
-
-	// Generate code with the plugin
-	err = api.Generate(cfg, api.AddPlugin(p))
+	// Generate gqlgen code
+	err = api.Generate(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(3)
@@ -167,15 +189,20 @@ Then load it in your `generate.go`:
 
 ```go
 func main() {
-    cfg, _ := config.LoadConfigFromDefaultLocations()
-    
-    // Load plugin configuration from gqlschemagen.yml
+    // Load plugin configuration and generate schemas FIRST
     p, err := plugin.LoadConfigFromFile("gqlschemagen.yml")
     if err != nil {
         panic(err)
     }
     
-    api.Generate(cfg, api.AddPlugin(p))
+    // Generate schemas before loading gqlgen config
+    if err := p.GenerateSchemas(); err != nil {
+        panic(err)
+    }
+    
+    // Now load gqlgen config and generate code
+    cfg, _ := config.LoadConfigFromDefaultLocations()
+    api.Generate(cfg)
 }
 ```
 
@@ -186,12 +213,22 @@ See the [example gqlschemagen.yml](../examples/gqlgen-plugin/gqlschemagen.yml) f
 Configure directly in `generate.go`:
 
 ```go
-p := plugin.New()
+func main() {
+	// Create and configure plugin
+	p := plugin.New()
+	p.Packages = []string{
+		"./graph/models",
+		"./internal/domain",
+	}
 
-// Required: Packages to scan for Go structs with gql annotations
-p.Packages = []string{
-	"./graph/models",
-	"./internal/domain",
+	// Generate schemas FIRST
+	if err := p.GenerateSchemas(); err != nil {
+		panic(err)
+	}
+
+	// Then load gqlgen config and generate
+	cfg, _ := config.LoadConfigFromDefaultLocations()
+	api.Generate(cfg)
 }
 ```
 

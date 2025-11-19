@@ -157,6 +157,12 @@ func (p *Plugin) MutateConfig(cfg *config.Config) error {
 	return nil
 }
 
+// GenerateSchemas generates GraphQL schemas from configured packages
+// This can be called standalone before gqlgen runs
+func (p *Plugin) GenerateSchemas() error {
+	return p.MutateConfig(nil)
+}
+
 // generateSchema generates GraphQL schema from a Go package
 func (p *Plugin) generateSchema(pkgPath string) error {
 	// Clone config and set input
