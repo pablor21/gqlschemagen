@@ -56,5 +56,6 @@ gen_inputs: true
 # GQLKeep preserved sections markers
 # Placement of the preserved sections (options: "start", "end")
 keep_section_placement: "end"
+# markers to denote beginning and end of preserved sections
 keep_begin_marker: "# @gqlKeepBegin"
 keep_end_marker: "# @gqlKeepEnd"
