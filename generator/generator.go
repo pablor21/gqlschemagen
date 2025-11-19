@@ -79,9 +79,10 @@ func (g *Generator) Run() error {
 
 func (g *Generator) buildDependencyOrder() []string {
 	names := make([]string, 0, len(g.P.TypeNames))
-	for _, n := range g.P.TypeNames {
-		names = append(names, n)
-	}
+	// for _, n := range g.P.TypeNames {
+	// 	names = append(names, n)
+	// }
+	names = append(names, g.P.TypeNames...)
 	sort.Strings(names)
 
 	// Topological sort

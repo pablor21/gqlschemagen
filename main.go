@@ -96,7 +96,10 @@ func initCommand(args []string) {
 	force := fs.Bool("force", false, "overwrite existing file")
 	fs.BoolVar(force, "f", false, "short for --force")
 
-	fs.Parse(processedArgs)
+	err := fs.Parse(processedArgs)
+	if err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	// Check if file already exists
 	if _, err := os.Stat(*output); err == nil && !*force {
@@ -190,7 +193,10 @@ func generateCommand(args []string) {
 
 	includeEmptyTypes := fs.Bool("include-empty-types", false, "include types with no fields in the schema")
 
-	fs.Parse(processedArgs)
+	err := fs.Parse(processedArgs)
+	if err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	// Initialize config
 	cfg := generator.NewConfig()
