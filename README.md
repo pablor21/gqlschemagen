@@ -28,7 +28,7 @@ custom naming strategies, and extensive configuration options.
   - [CLI Flags](#cli-flags)
   - [Field Case Transformations](#field-case-transformations)
   - [Using JSON Tags](#using-json-tags)
-  - [Keeping Schema Modifications](#keep-sections)
+  - [Keeping Schema Modifications](#keeping-schema-modifications)
 - [Examples](#examples)
 - [Integration with gqlgen](#integration-with-gqlgen)
 - [Advanced Usage](#advanced-usage)
