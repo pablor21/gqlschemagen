@@ -25,6 +25,7 @@ custom naming strategies, and extensive configuration options.
   - [CLI Flags](#cli-flags)
   - [Field Case Transformations](#field-case-transformations)
   - [Using JSON Tags](#using-json-tags)
+  - [Output Configuration](#output-configuration)
   - [Keeping Schema Modifications](#keeping-schema-modifications)
 - [Examples](#examples)
 - [Integration with gqlgen](#integration-with-gqlgen)
@@ -44,7 +45,8 @@ custom naming strategies, and extensive configuration options.
 - 🎯 **Annotation-based**: Use comments to control schema generation
 - 📝 **Struct Tag Support**: Fine-grained control via struct tags
 - 🔄 **Flexible Field Naming**: Multiple case transformations (camel, snake, pascal)
-- 📦 **Generation Strategies**: Single file or multiple files
+- 📦 **Generation Strategies**: Single file, multiple files, or per-package files
+- 🗂️ **Namespace Organization**: Organize schemas into subdirectories using @gqlNamespace
 - 🎨 **[gqlgen](https://github.com/99designs/gqlgen) Integration**: Automatic @goModel and @goField directives
 - 📋 **Input Type Generation**: Auto-generate GraphQL Input types
 - 📚 **Field Descriptions**: Extract from struct tags or comments
@@ -182,6 +184,12 @@ gqlschemagen generate \
   -p ./internal/domain/entities \
   -o ./graph/schema/generated \
   -s multiple
+
+# Generate schema files organized by Go package
+gqlschemagen generate \
+  --pkg ./internal/domain \
+  --out ./graph/schema/generated \
+  --strategy package
 ```
 
 #### Using YAML Configuration
@@ -201,11 +209,17 @@ This creates a `gqlschemagen.yml` file with all available options:
 packages:
    - ./
 
-# Output strategy: "single" for one file, "multiple" for separate files per type
+# Output strategy: "single" for one file, "multiple" for separate files per type, "package" for one file per Go package
 strategy: single
 
-# Output path (file for single strategy, directory for multiple)
+# Output configuration:
+# Option 1 (simple): Specify complete file path (backward compatible)
 output: graph/schema/generated.graphql
+
+# Option 2 (recommended): Separate directory and filename for better organization
+# output: graph/schema/              # Output directory
+# output_file_name: myschema.graphqls # Filename for single strategy (default: gqlschemagen.graphqls)
+# output_file_extension: .graphql     # Extension for multiple/package strategies (default: .graphql)
 
 # Field name transformation: camel, snake, pascal, original, none
 field_case: camel
@@ -231,6 +245,9 @@ add_input_suffix: ""
 
 # Schema file name pattern for multiple mode (default: {model_name}.graphqls)
 schema_file_name: "{model_name}.graphqls"
+
+# Namespace separator for organizing schema files (default: "/")
+namespace_separator: "/"
 
 # Include types with no fields
 include_empty_types: false
@@ -787,14 +804,6 @@ type User struct {
 }
 ```
 
-Generates:
-```graphql
-type User {
-  id: ID!
-  role: UserRole!
-}
-```
-
 **Parameters for `@gqlEnumValue`:**
 - `name` (optional): Custom GraphQL enum value name. If omitted, auto-generated from const name
 - `description` (optional): Value description
@@ -827,6 +836,155 @@ const (
 	StatusComplete types.Status = "COMPLETE"
 )
 ```
+
+
+#### `@gqlNamespace(name:"path/to/namespace")`
+
+Organize generated schema files into subdirectories using namespaces. This is particularly useful for large projects with many types.
+
+**File-level namespace (applies to all types in the file):**
+
+```go
+package models
+
+/**
+ * @gqlNamespace(name:"api/v1")
+ */
+
+/**
+ * @gqlType(name:"User")
+ */
+type User struct {
+	ID   string `gql:"id,type:ID"`
+	Name string
+}
+
+/**
+ * @gqlType(name:"Product")
+ */
+type Product struct {
+	ID    string `gql:"id,type:ID"`
+	Title string
+}
+```
+
+When using `multiple` or `package` strategy with namespaces:
+- Types generate to: `{output}/api/v1/User.graphql` and `{output}/api/v1/Product.graphql`
+
+When using `single` strategy with namespaces:
+- All types generate to: `{output}/api/v1.graphql`
+
+**Type-level namespace override:**
+
+You can override the file-level namespace for specific types:
+
+```go
+/**
+ * @gqlNamespace(name:"common")
+ */
+
+/**
+ * @gqlType(name:"User",namespace:"user/auth")
+ */
+type User struct {
+	ID string `gql:"id,type:ID"`
+}
+
+/**
+ * @gqlType(name:"Product")
+ */
+type Product struct {
+	ID string `gql:"id,type:ID"`
+}
+```
+
+Results:
+- `User` → `{output}/user/auth/User.graphql` (type-level override)
+- `Product` → `{output}/common/Product.graphql` (file-level namespace)
+
+**Namespace with enums:**
+
+Enums also support namespaces:
+
+```go
+/**
+ * @gqlNamespace(name:"common/enums")
+ */
+
+/**
+ * @gqlEnum(name:"Status")
+ */
+type Status string
+
+const (
+	StatusActive   Status = "active"   // @gqlEnumValue(name:"ACTIVE")
+	StatusInactive Status = "inactive" // @gqlEnumValue(name:"INACTIVE")
+)
+```
+
+Or override per-enum:
+
+```go
+/**
+ * @gqlEnum(name:"Status",namespace:"special/status")
+ */
+type Status string
+```
+
+**Combining namespaces:**
+
+Types from different files with the same namespace are combined into one file when using `single` strategy:
+
+```go
+// user.go
+/**
+ * @gqlNamespace(name:"api/v1")
+ * @gqlType(name:"User")
+ */
+type User struct { ID string }
+
+// product.go  
+/**
+ * @gqlNamespace(name:"api/v1")
+ * @gqlType(name:"Product")
+ */
+type Product struct { ID string }
+```
+
+Both types generate to: `{output}/api/v1.graphql`
+
+**Custom namespace separator:**
+
+By default, namespaces use `/` as a separator (creating subdirectories). You can customize this in your config:
+
+```yaml
+namespace_separator: "/"  # Default: creates subdirectories
+# namespace_separator: "." # Alternative: api.v1.graphql instead of api/v1.graphql
+```
+
+**Strategy-specific behavior:**
+
+- **Single strategy**: Namespaces create separate files (one per unique namespace)
+- **Multiple strategy**: Combines namespace path with type name (`{namespace}/{typename}.graphql`)
+- **Package strategy**: Combines namespace path with package name (`{namespace}/{package}.graphql`)
+
+**Parameters:**
+- `name` (required): The namespace path (e.g., `"api/v1"`, `"user/auth"`, `"common"`)
+
+**Notes:**
+- File-level `@gqlNamespace` must appear before any type/enum/input definitions
+- Type-level `namespace` parameter in `@gqlType`, `@gqlInput`, or `@gqlEnum` overrides file-level namespace
+- Namespaces are optional - types without namespaces generate to the root output directory
+- When using single strategy without namespaces, all types go into one file
+
+Generates:
+```graphql
+type User {
+  id: ID!
+  role: UserRole!
+}
+```
+
  
 
 ### Field-level Struct Tags
@@ -995,7 +1153,16 @@ go run github.com/pablor21/gqlschemagen generate --config custom.yml
 packages: 
     - ./internal/domain/entities
     - ./internal/models
-output: ./graph/schema/generated
+
+# Output configuration - choose one style:
+# Style 1 (simple): Complete file path
+output: ./graph/schema/generated.graphql
+
+# Style 2 (recommended): Separate directory and filename
+# output: ./graph/schema/
+# output_file_name: generated.graphqls
+# output_file_extension: .graphql
+
 strategy: single
 field_case: camel
 use_json_tag: true
@@ -1008,6 +1175,7 @@ add_type_suffix: ""
 add_input_prefix: ""
 add_input_suffix: ""
 schema_file_name: "{model_name}.graphqls"
+namespace_separator: "/"
 include_empty_types: false
 skip_existing: false
 ```
@@ -1038,9 +1206,24 @@ gqlschemagen generate [flags]
     
 --out, -o string
     Output directory or file path (default: "graph/schema/gqlschemagen.graphqls" for single, "graph/schema" for multiple)
+    For single strategy: can be a complete file path (e.g., "./schema/my.graphql") or directory (use with --output-file-name)
+    For multiple/package strategies: must be a directory
+
+--output-file-name string
+    Filename to use when output is a directory (single strategy only)
+    Default: "gqlschemagen.graphqls"
+    Only used when --out is a directory, not a file path
+
+--output-file-extension string
+    File extension for generated schema files (multiple/package strategies)
+    Default: ".graphql"
+    Examples: ".graphql", ".graphqls", ".gql"
     
 --strategy, -s string
-    Generation strategy: "single" or "multiple" (default: "single")
+    Generation strategy: "single", "multiple", or "package" (default: "single")
+    - single: All types in one file
+    - multiple: One file per type
+    - package: One file per Go package
     
 --field-case, -c string
     Field name case transformation: "camel", "snake", "pascal", "original", or "none" (default: "camel")
@@ -1084,6 +1267,11 @@ gqlschemagen generate [flags]
 --schema-file-name string
     Schema file name pattern for multiple mode (default: "{model_name}.graphqls")
     Available placeholders: {model_name}, {type_name}
+
+--namespace-separator string
+    Separator character for namespace paths when using @gqlNamespace (default: "/")
+    "/" creates subdirectories (e.g., api/v1/User.graphql)
+    "." creates flat files with dots (e.g., api.v1.User.graphql)
     
 --include-empty-types bool
     Include types with no fields in the schema (default: false)
@@ -1182,6 +1370,82 @@ type SecureUser {
 - `json:"-"` is only respected when `-use-json-tag=true`
 - `gql:"include"` overrides `json:"-"` behavior
 - Priority: `gql` tag > `json` tag > struct field name
+
+### Output Configuration
+
+The generator supports flexible output configuration with backward compatibility.
+
+#### Simple Style (Backward Compatible)
+
+Specify a complete file path in the `output` option:
+
+```yaml
+strategy: single
+output: ./graph/schema/generated.graphql
+```
+
+This works for both YAML configs and CLI:
+```bash
+gqlschemagen generate --pkg ./models --out ./schema/my.graphql
+```
+
+#### Recommended Style (Separate Directory and Filename)
+
+For better organization, separate the directory from the filename:
+
+```yaml
+strategy: single
+output: ./graph/schema/
+output_file_name: generated.graphqls
+output_file_extension: .graphql  # Used in multiple/package strategies
+```
+
+**Benefits:**
+- Clearer separation of concerns
+- Easier to change filenames without affecting directory structure
+- More consistent with multiple/package strategies
+
+#### Strategy-Specific Behavior
+
+**Single Strategy:**
+- `output` can be a file path (e.g., `./schema/file.graphql`) or directory (e.g., `./schema/`)
+- If `output` is a directory, uses `output_file_name` for the filename
+- Default `output_file_name`: `gqlschemagen.graphqls`
+
+**Multiple Strategy:**
+- `output` must be a directory
+- Each type generates a separate file
+- Uses `output_file_extension` for file extensions (default: `.graphql`)
+- Filename pattern controlled by `schema_file_name` (default: `{model_name}.graphqls`)
+
+**Package Strategy:**
+- `output` must be a directory
+- One file per Go package
+- Uses `output_file_extension` for file extensions (default: `.graphql`)
+
+#### Examples
+
+```yaml
+# Example 1: Single file with complete path
+strategy: single
+output: ./graph/schema/all-types.graphql
+
+# Example 2: Single file with directory + filename
+strategy: single
+output: ./graph/schema/
+output_file_name: all-types.graphqls
+
+# Example 3: Multiple files with custom extension
+strategy: multiple
+output: ./graph/schema/types/
+output_file_extension: .gql
+schema_file_name: "{model_name}.gql"
+
+# Example 4: Package strategy with custom extension
+strategy: package
+output: ./graph/schema/packages/
+output_file_extension: .graphqls
+```
 
 ### Keeping Schema Modifications
 
@@ -1357,6 +1621,104 @@ graph/schema/types/
 ├── comment.graphqls
 └── ...
 ```
+
+### Example 6: Package-based File Generation
+
+The `package` strategy groups all types from the same Go package into a single schema file. This is useful for organizing schemas by domain boundaries.
+
+```bash
+gqlschemagen generate \
+  --pkg ./internal/domain \
+  --out ./graph/schema/generated \
+  --strategy package
+```
+
+**Project structure:**
+```
+internal/domain/
+├── users/
+│   ├── user.go
+│   └── profile.go
+├── posts/
+│   ├── post.go
+│   └── comment.go
+└── auth/
+    └── credentials.go
+```
+
+**Generated file structure:**
+```
+graph/schema/generated/
+├── users.graphql      # Contains User and Profile types
+├── posts.graphql      # Contains Post and Comment types
+└── auth.graphql       # Contains Credentials type
+```
+
+**Example:**
+
+```go
+// internal/domain/users/user.go
+package users
+
+/**
+ * @gqlType()
+ */
+type User struct {
+    ID    string `gql:"type:ID"`
+    Email string
+}
+
+// internal/domain/users/profile.go
+package users
+
+/**
+ * @gqlType()
+ */
+type Profile struct {
+    UserID string `gql:"type:ID"`
+    Bio    string
+}
+
+// internal/domain/posts/post.go
+package posts
+
+/**
+ * @gqlType()
+ */
+type Post struct {
+    ID     string `gql:"type:ID"`
+    Title  string
+    Author string
+}
+```
+
+**Generated users.graphql:**
+```graphql
+type User @goModel(model: "yourproject/internal/domain/users.User") {
+    id: ID!
+    email: String!
+}
+
+type Profile @goModel(model: "yourproject/internal/domain/users.Profile") {
+    userID: ID!
+    bio: String!
+}
+```
+
+**Generated posts.graphql:**
+```graphql
+type Post @goModel(model: "yourproject/internal/domain/posts.Post") {
+    id: ID!
+    title: String!
+    author: String!
+}
+```
+
+**Benefits of package strategy:**
+- Natural organization by domain/package
+- Easier to maintain related types together
+- Aligns schema structure with Go code structure
+- Reduces number of files compared to `multiple` strategy
 
 ## Integration with gqlgen
 

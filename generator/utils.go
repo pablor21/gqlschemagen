@@ -19,8 +19,8 @@ func EnsureDir(dir string) error {
 }
 
 func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // FieldTypeName returns the bare type name used for nested type lookup

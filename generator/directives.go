@@ -22,6 +22,7 @@ type TypeDefinition struct {
 	Name        string // Custom type name
 	Description string // Type description
 	IgnoreAll   bool   // ignoreAll property
+	Namespace   string // Custom namespace override
 }
 
 // InputDefinition represents a single @gqlInput annotation
@@ -29,6 +30,7 @@ type InputDefinition struct {
 	Name        string // Custom input name
 	Description string // Input description
 	IgnoreAll   bool   // ignoreAll property
+	Namespace   string // Custom namespace override
 }
 
 // StructDirectives holds parsed values from surrounding comments for a type
@@ -76,7 +78,7 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 				line = strings.TrimPrefix(line, "*")
 				line = strings.TrimSpace(line)
 
-				// @gqlType(name:"TypeName",description:"desc",ignoreAll:true)
+				// @gqlType(name:"TypeName",description:"desc",ignoreAll:true,namespace:"api/v1")
 				if strings.HasPrefix(line, "@gqlType(") || line == "@gqlType" {
 					res.HasTypeDirective = true
 					params := parseDirectiveParams(line, "@gqlType")
@@ -94,10 +96,13 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 					if ignoreAll, ok := params["ignoreAll"]; ok && (ignoreAll == "true" || ignoreAll == "1") {
 						typeDef.IgnoreAll = true
 					}
+					if namespace, ok := params["namespace"]; ok {
+						typeDef.Namespace = namespace
+					}
 					res.Types = append(res.Types, typeDef)
 				}
 
-				// @gqlInput(name:"InputName",description:"desc",ignoreAll:true)
+				// @gqlInput(name:"InputName",description:"desc",ignoreAll:true,namespace:"api/v1")
 				if strings.HasPrefix(line, "@gqlInput(") || line == "@gqlInput" {
 					res.HasInputDirective = true
 					res.GenInput = true // Enable input generation
@@ -112,6 +117,9 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 					}
 					if ignoreAll, ok := params["ignoreAll"]; ok && (ignoreAll == "true" || ignoreAll == "1") {
 						inputDef.IgnoreAll = true
+					}
+					if namespace, ok := params["namespace"]; ok {
+						inputDef.Namespace = namespace
 					}
 					res.Inputs = append(res.Inputs, inputDef)
 				} // @gqlIgnoreAll

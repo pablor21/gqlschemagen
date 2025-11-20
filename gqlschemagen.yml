@@ -26,11 +26,17 @@
 packages:
    - ./
 
-# Output strategy: "single" for one file, "multiple" for separate files per type
+# Output strategy: "single" for one file, "multiple" for separate files per type, "package" for separate files per package
 strategy: single
 
-# Output path (file for single strategy, directory for multiple)
-output: graph/schema/gqlschemagen.graphqls
+# Output path 
+output: graph/schema/
+
+# output file name when using single strategy
+output_file_name: gqlschemagen.graphqls
+
+# output file extension for multiple strategy
+output_file_extension: .graphqls
 
 # Field name transformation: camel, snake, pascal, original, none
 # - camel: FirstName -> firstName

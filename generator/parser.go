@@ -49,6 +49,9 @@ type Parser struct {
 	enumCandidates map[string]*enumCandidate
 	// Const blocks collected for later matching to enum types
 	constBlocks []*constBlockInfo
+	// Namespace support - maps type/enum name to namespace
+	TypeNamespaces map[string]string // type name -> namespace
+	EnumNamespaces map[string]string // enum name -> namespace
 }
 
 func NewParser() *Parser {
@@ -61,6 +64,8 @@ func NewParser() *Parser {
 		EnumTypes:      make(map[string]*EnumType),
 		enumCandidates: make(map[string]*enumCandidate),
 		constBlocks:    make([]*constBlockInfo, 0),
+		TypeNamespaces: make(map[string]string),
+		EnumNamespaces: make(map[string]string),
 	}
 }
 
@@ -119,6 +124,9 @@ func (p *Parser) parseFile(path string) error {
 	}
 	pkgName := f.Name.Name
 
+	// Extract file-level namespace from comments after package declaration
+	fileNamespace := extractFileNamespace(f)
+
 	// First pass: collect type declarations (structs and potential enums)
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
@@ -142,6 +150,11 @@ func (p *Parser) parseFile(path string) error {
 					p.PackagePaths[name] = path
 					p.TypeToDecl[name] = genDecl
 					p.TypeNames = appendIfMissing(p.TypeNames, name)
+
+					// Store namespace (file-level or type-level override)
+					if fileNamespace != "" {
+						p.TypeNamespaces[name] = fileNamespace
+					}
 					continue
 				}
 
@@ -151,11 +164,12 @@ func (p *Parser) parseFile(path string) error {
 					if baseType == "string" || baseType == "int" {
 						// Store enum candidate for later matching
 						p.enumCandidates[t.Name.Name] = &enumCandidate{
-							TypeSpec: t,
-							GenDecl:  genDecl,
-							BaseType: baseType,
-							PkgName:  pkgName,
-							FilePath: path,
+							TypeSpec:  t,
+							GenDecl:   genDecl,
+							BaseType:  baseType,
+							PkgName:   pkgName,
+							FilePath:  path,
+							Namespace: fileNamespace,
 						}
 					}
 				}
@@ -183,11 +197,12 @@ func (p *Parser) parseFile(path string) error {
 
 // enumCandidate holds info about a potential enum type before we find its const values
 type enumCandidate struct {
-	TypeSpec *ast.TypeSpec
-	GenDecl  *ast.GenDecl
-	BaseType string // "string" or "int"
-	PkgName  string
-	FilePath string
+	TypeSpec  *ast.TypeSpec
+	GenDecl   *ast.GenDecl
+	BaseType  string // "string" or "int"
+	PkgName   string
+	FilePath  string
+	Namespace string // File-level namespace
 }
 
 // constBlockInfo holds info about a const block for later matching to enum types
@@ -204,6 +219,68 @@ func appendIfMissing(list []string, v string) []string {
 		}
 	}
 	return append(list, v)
+}
+
+// extractFileNamespace extracts namespace from file-level @gqlNamespace directive
+// Looks for @gqlNamespace directive in comments anywhere in the file header
+func extractFileNamespace(f *ast.File) string {
+	// Check all comment groups in the file
+	for _, commentGroup := range f.Comments {
+		if ns := findNamespaceInComments(commentGroup); ns != "" {
+			// Check if this comment appears before any type declarations
+			// by comparing positions
+			for _, decl := range f.Decls {
+				genDecl, ok := decl.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				if genDecl.Tok == token.TYPE {
+					// If the comment is before the first type declaration, it's file-level
+					if commentGroup.Pos() < genDecl.Pos() {
+						return ns
+					}
+					break
+				}
+			}
+		}
+	}
+
+	return ""
+} // findNamespaceInComments looks for @gqlNamespace directive in comment group
+func findNamespaceInComments(cg *ast.CommentGroup) string {
+	for _, comment := range cg.List {
+		text := comment.Text
+		// Normalize block comments
+		text = strings.TrimPrefix(text, "/*")
+		text = strings.TrimPrefix(text, "/**")
+		text = strings.TrimSuffix(text, "*/")
+		text = strings.TrimSpace(text)
+
+		for _, line := range strings.Split(text, "\n") {
+			line = strings.TrimSpace(line)
+			line = strings.TrimPrefix(line, "*")
+			line = strings.TrimSpace(line)
+
+			// Look for @gqlNamespace(name:"value")
+			if strings.Contains(line, "@gqlNamespace") {
+				if idx := strings.Index(line, "@gqlNamespace"); idx != -1 {
+					rest := line[idx:]
+					// Find name parameter
+					if nameIdx := strings.Index(rest, "name:"); nameIdx != -1 {
+						nameStart := rest[nameIdx+5:]
+						// Extract quoted value
+						nameStart = strings.TrimSpace(nameStart)
+						if strings.HasPrefix(nameStart, `"`) {
+							if endIdx := strings.Index(nameStart[1:], `"`); endIdx != -1 {
+								return nameStart[1 : endIdx+1]
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // GetPackageImportPath returns the full import path for a type
@@ -452,8 +529,8 @@ func (p *Parser) parseConstBlock(constBlock *constBlockInfo, enumCandidates map[
 
 	// Create the EnumType and store it
 	if len(values) > 0 {
-		// Parse @gqlEnum directive for custom name and description
-		enumName, enumDesc := parseEnumDirective(candidate.GenDecl.Doc, enumTypeName)
+		// Parse @gqlEnum directive for custom name, description, and namespace
+		enumName, enumDesc, enumNamespace := parseEnumDirective(candidate.GenDecl.Doc, enumTypeName)
 
 		enumType := &EnumType{
 			Name:        enumName,
@@ -469,6 +546,13 @@ func (p *Parser) parseConstBlock(constBlock *constBlockInfo, enumCandidates map[
 		p.EnumNames = appendIfMissing(p.EnumNames, enumTypeName)
 		p.PackageNames[enumTypeName] = candidate.PkgName
 		p.PackagePaths[enumTypeName] = candidate.FilePath
+
+		// Store namespace: enum-level override takes precedence over file-level
+		if enumNamespace != "" {
+			p.EnumNamespaces[enumTypeName] = enumNamespace
+		} else if candidate.Namespace != "" {
+			p.EnumNamespaces[enumTypeName] = candidate.Namespace
+		}
 	}
 }
 
@@ -581,14 +665,15 @@ func toScreamingSnakeCase(s string) string {
 	return strings.ToUpper(string(result))
 }
 
-// parseEnumDirective extracts custom name and description from @gqlEnum directive
-// Returns (customName or defaultName, description)
-func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (string, string) {
+// parseEnumDirective extracts custom name, description, and namespace from @gqlEnum directive
+// Returns (customName or defaultName, description, namespace)
+func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (string, string, string) {
 	name := defaultName
 	var description string
+	var namespace string
 
 	if commentGroup == nil {
-		return name, description
+		return name, description, namespace
 	}
 
 	for _, comment := range commentGroup.List {
@@ -614,6 +699,10 @@ func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (str
 				if desc := extractDirectiveParam(line, "description"); desc != "" {
 					description = desc
 				}
+				// Extract namespace parameter if present
+				if ns := extractDirectiveParam(line, "namespace"); ns != "" {
+					namespace = ns
+				}
 			} else if !strings.HasPrefix(line, "@") && line != "" && description == "" {
 				// Use regular comment as description if no @gqlEnum description
 				description = line
@@ -621,5 +710,5 @@ func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (str
 		}
 	}
 
-	return name, description
+	return name, description, namespace
 }

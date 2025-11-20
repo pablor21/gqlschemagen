@@ -131,6 +131,8 @@ func generateCommand(args []string) {
 		fmt.Fprintf(os.Stderr, "Optional flags:\n")
 		fmt.Fprintf(os.Stderr, "  --config, -f <file>           Path to config file (default: gqlschemagen.yml)\n")
 		fmt.Fprintf(os.Stderr, "  --out, -o <path>              Output directory or file path (default: graph/schema)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-name <name>     Output file name for single strategy (default: gqlschemagen.graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-extension <ext> Output file extension for multiple/package strategies (default: .graphqls)\n")
 		fmt.Fprintf(os.Stderr, "  --strategy, -s <strategy>     Generation strategy: single or multiple (default: single)\n")
 		fmt.Fprintf(os.Stderr, "  --skip-existing               Skip generating files that already exist\n")
 		fmt.Fprintf(os.Stderr, "  --field-case, -c <case>       Field name case: camel, snake, pascal, original, none (default: camel)\n")
@@ -160,6 +162,10 @@ func generateCommand(args []string) {
 
 	out := fs.String("out", "", "output directory or file path")
 	fs.StringVar(out, "o", "", "short for --out")
+
+	outputFileName := fs.String("output-file-name", "", "output file name for single strategy")
+
+	outputFileExtension := fs.String("output-file-extension", "", "output file extension for multiple/package strategies")
 
 	strategy := fs.String("strategy", "single", "generation strategy: single or multiple")
 	fs.StringVar(strategy, "s", "single", "short for --strategy")
@@ -225,6 +231,10 @@ func generateCommand(args []string) {
 			cfg.Packages = []string{*pkg}
 		case "out", "o":
 			cfg.Output = *out
+		case "output-file-name":
+			cfg.OutputFileName = *outputFileName
+		case "output-file-extension":
+			cfg.OutputFileExtension = *outputFileExtension
 		case "strategy", "s":
 			cfg.GenStrategy = generator.GenStrategy(*strategy)
 		case "skip-existing":
