@@ -2,28 +2,27 @@ package generator
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-
-	"gopkg.in/yaml.v3"
 )
 
+// GenerateFromDefaultConfig searches for a config file in the current directory
+// and parent directories, then generates the schema. If no config file is found,
+// it uses default configuration values.
 func GenerateFromDefaultConfig() error {
-	return GenerateFromConfigFile("gqlschemagen.yml")
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	return Generate(cfg)
 }
 
+// GenerateFromConfigFile loads a specific config file and generates the schema
 func GenerateFromConfigFile(configPath string) error {
-	data, err := os.ReadFile(configPath)
+	cfg, err := LoadConfigFromFile(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to read config file %s: %w", configPath, err)
+		return err
 	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("failed to parse config file %s: %w", configPath, err)
-	}
-
-	return Generate(&cfg)
+	return Generate(cfg)
 }
 
 // Generate runs the schema generation with the provided configuration

@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
 // ExtraField represents a @gqlTypeExtraField or @gqlInputExtraField annotation
@@ -155,10 +156,7 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 							ef.OverrideTags = tags
 						}
 						if on, ok := params["on"]; ok {
-							ef.On = strings.Split(on, ",")
-							for i := range ef.On {
-								ef.On[i] = strings.TrimSpace(ef.On[i])
-							}
+							ef.On = parseListValue(on)
 						} else {
 							ef.On = []string{"*"}
 						}
@@ -185,10 +183,7 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 							ef.OverrideTags = tags
 						}
 						if on, ok := params["on"]; ok {
-							ef.On = strings.Split(on, ",")
-							for i := range ef.On {
-								ef.On[i] = strings.TrimSpace(ef.On[i])
-							}
+							ef.On = parseListValue(on)
 						} else {
 							ef.On = []string{"*"}
 						}
@@ -214,10 +209,7 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 							ef.OverrideTags = tags
 						}
 						if on, ok := params["on"]; ok {
-							ef.On = strings.Split(on, ",")
-							for i := range ef.On {
-								ef.On[i] = strings.TrimSpace(ef.On[i])
-							}
+							ef.On = parseListValue(on)
 						} else {
 							ef.On = []string{"*"}
 						}
@@ -292,11 +284,12 @@ func parseDirectiveParams(line, prefix string) map[string]string {
 	return result
 }
 
-// splitParams splits parameters by comma, respecting quoted strings
+// splitParams splits parameters by comma, respecting quoted strings and brackets
 func splitParams(s string) []string {
 	var parts []string
 	var current strings.Builder
 	inQuotes := false
+	bracketDepth := 0
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
@@ -304,7 +297,13 @@ func splitParams(s string) []string {
 		if c == '"' {
 			inQuotes = !inQuotes
 			current.WriteByte(c)
-		} else if c == ',' && !inQuotes {
+		} else if c == '[' && !inQuotes {
+			bracketDepth++
+			current.WriteByte(c)
+		} else if c == ']' && !inQuotes {
+			bracketDepth--
+			current.WriteByte(c)
+		} else if c == ',' && !inQuotes && bracketDepth == 0 {
 			parts = append(parts, current.String())
 			current.Reset()
 		} else {
@@ -319,12 +318,100 @@ func splitParams(s string) []string {
 	return parts
 }
 
+// parseListValue parses a value that can be either:
+// - A comma-separated string: "Type1,Type2"
+// - An array with double quotes: ["Type1","Type2"]
+// - An array with single quotes: ['Type1','Type2']
+// - An empty string: ""
+// - An empty array: [] or ”
+// Returns a slice of trimmed strings, or nil for empty values
+func parseListValue(value string) []string {
+	value = strings.TrimSpace(value)
+
+	// Handle empty string or empty array literals
+	if value == "" || value == "[]" || value == "''" {
+		return nil
+	}
+
+	// Handle array syntax with brackets
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		// Remove brackets
+		value = strings.TrimPrefix(value, "[")
+		value = strings.TrimSuffix(value, "]")
+		value = strings.TrimSpace(value)
+
+		if value == "" {
+			return nil
+		}
+
+		// Parse comma-separated items respecting quotes
+		var items []string
+		var current strings.Builder
+		inQuotes := false
+		quoteChar := byte(0)
+
+		for i := 0; i < len(value); i++ {
+			c := value[i]
+
+			if !inQuotes && (c == '"' || c == '\'') {
+				inQuotes = true
+				quoteChar = c
+				// Don't include the quote character itself
+			} else if inQuotes && c == quoteChar {
+				inQuotes = false
+				quoteChar = 0
+				// Don't include the quote character itself
+			} else if c == ',' && !inQuotes {
+				item := strings.TrimSpace(current.String())
+				if item != "" {
+					items = append(items, item)
+				}
+				current.Reset()
+			} else if inQuotes || !unicode.IsSpace(rune(c)) {
+				// Skip spaces outside quotes
+				current.WriteByte(c)
+			}
+		}
+
+		// Add the last item
+		if current.Len() > 0 {
+			item := strings.TrimSpace(current.String())
+			if item != "" {
+				items = append(items, item)
+			}
+		}
+
+		return items
+	}
+
+	// Handle comma-separated string (legacy format)
+	parts := strings.Split(value, ",")
+	var result []string
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
+}
+
 // FieldOptions describes parsed options from gql struct tag
 type FieldOptions struct {
 	Name             string
-	Ignore           bool
-	Include          bool
-	Omit             bool
+	Ignore           bool     // Legacy: ignore everywhere
+	Include          bool     // Legacy: include everywhere
+	Omit             bool     // Legacy: omit everywhere (alias for Ignore)
+	IgnoreList       []string // List of types to ignore/omit this field in (supports *)
+	IncludeList      []string // List of types to include this field in (supports *)
+	ReadWrite        []string // rw: include in both types and inputs (supports *)
+	ReadOnly         []string // ro: include only in types, ignore in inputs (supports *)
+	WriteOnly        []string // wo: include only in inputs, ignore in types (supports *)
 	Optional         bool
 	Required         bool
 	Type             string // Custom GraphQL type
@@ -364,8 +451,8 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 		return res
 	}
 
-	// Parse gql tag using splitParams to handle quoted values with commas
-	parts := splitParams(g)
+	// Parse gql tag - handle key:value,value,value specially for lists
+	parts := splitParamsWithLists(g)
 
 	// First part is the name (unless empty/omitted)
 	if len(parts) > 0 {
@@ -384,7 +471,7 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 			continue
 		}
 
-		// Handle key:value pairs (type:, description:, deprecated:)
+		// Handle key:value pairs (type:, description:, deprecated:, include:, omit:, ignore:, rw:, ro:, wo:)
 		if strings.Contains(p, ":") {
 			kv := strings.SplitN(p, ":", 2)
 			key := strings.TrimSpace(kv[0])
@@ -400,18 +487,45 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 				// deprecated:"reason" - mark as deprecated with reason
 				res.Deprecated = true
 				res.DeprecatedReason = strings.Trim(value, "\"'")
+			case "include":
+				// include:TypeA,TypeB or include:* or include (backwards compat)
+				res.IncludeList = parseTypeList(value)
+			case "omit", "ignore":
+				// omit/ignore:TypeA,TypeB or omit/ignore:* (omit is alias for ignore)
+				res.IgnoreList = parseTypeList(value)
+			case "rw":
+				// rw:TypeA,TypeB or rw:* or rw (read-write, both types and inputs)
+				res.ReadWrite = parseTypeList(value)
+			case "ro":
+				// ro:TypeA,TypeB or ro:* or ro (read-only, types only)
+				res.ReadOnly = parseTypeList(value)
+			case "wo":
+				// wo:TypeA,TypeB or wo:* or wo (write-only, inputs only)
+				res.WriteOnly = parseTypeList(value)
 			}
 			continue
 		}
 
 		// Handle flags (no colon, just the flag name)
 		switch p {
-		case "ignore":
+		case "ignore", "omit":
+			// Legacy: ignore/omit everywhere (omit is alias for ignore)
 			res.Ignore = true
-		case "omit":
 			res.Omit = true
+			res.IgnoreList = []string{"*"}
 		case "include":
+			// Legacy: include everywhere
 			res.Include = true
+			res.IncludeList = []string{"*"}
+		case "rw":
+			// Read-write: include in both types and inputs (all)
+			res.ReadWrite = []string{"*"}
+		case "ro":
+			// Read-only: include only in types, not in inputs (all)
+			res.ReadOnly = []string{"*"}
+		case "wo":
+			// Write-only: include only in inputs, not in types (all)
+			res.WriteOnly = []string{"*"}
 		case "optional":
 			res.Optional = true
 		case "required":
@@ -427,6 +541,75 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 
 	return res
 }
+
+// splitParamsWithLists splits parameters by comma, respecting quoted strings and brackets
+// Comma-separated type lists can use: include:'TypeA,TypeB', include:"TypeA,TypeB", or include:[TypeA,TypeB]
+func splitParamsWithLists(s string) []string {
+	var parts []string
+	var current strings.Builder
+	var quoteChar byte // Stores the opening quote character (' or ")
+	inQuotes := false
+	inBrackets := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		if !inQuotes && !inBrackets {
+			switch c {
+			case '\'', '"':
+				// Opening quote
+				inQuotes = true
+				quoteChar = c
+				current.WriteByte(c)
+			case '[':
+				// Opening bracket
+				inBrackets = true
+				current.WriteByte(c)
+			case ',':
+				// Comma outside quotes/brackets separates parameters
+				if current.Len() > 0 {
+					parts = append(parts, current.String())
+					current.Reset()
+				}
+			default:
+				current.WriteByte(c)
+			}
+		} else if inQuotes {
+			current.WriteByte(c)
+			if c == quoteChar {
+				// Closing quote (matching the opening quote)
+				inQuotes = false
+			}
+		} else if inBrackets {
+			current.WriteByte(c)
+			if c == ']' {
+				// Closing bracket
+				inBrackets = false
+			}
+		}
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+
+	return parts
+}
+
+// isListKey checks if a key:value string has a key that expects a list
+// func isListKey(s string) bool {
+// 	s = strings.TrimSpace(s)
+// 	if !strings.Contains(s, ":") {
+// 		return false
+// 	}
+// 	key := strings.SplitN(s, ":", 2)[0]
+// 	key = strings.TrimSpace(key)
+// 	switch key {
+// 	case "include", "omit", "ignore", "rw", "ro", "wo":
+// 		return true
+// 	}
+// 	return false
+// }
 
 // ResolveFieldName resolves field name based on config and tags
 // Priority: gql tag name > json tag > struct field name (case transformation only applies to struct field)
@@ -505,13 +688,52 @@ func isAllUpper(s string) bool {
 // isKnownFlag checks if a string is a known gql tag flag
 func isKnownFlag(s string) bool {
 	switch s {
-	case "ignore", "omit", "include", "optional", "required", "forceResolver", "force_resolver", "deprecated":
+	case "ignore", "omit", "include", "optional", "required", "forceResolver", "force_resolver", "deprecated", "rw", "ro", "wo":
 		return true
 	}
 	return false
 }
 
-// StripPrefixSuffix removes specified prefixes and suffixes from a type name
+// parseTypeList parses a comma-separated list of type names
+// Supports: "TypeA,TypeB", "*", or TypeA (single value)
+// Returns ["*"] for empty values (backwards compatibility)
+func parseTypeList(value string) []string {
+	value = strings.TrimSpace(value)
+
+	// Remove surrounding quotes or brackets if present
+	if len(value) >= 2 {
+		if (value[0] == '"' && value[len(value)-1] == '"') ||
+			(value[0] == '\'' && value[len(value)-1] == '\'') {
+			// Remove quotes (single or double)
+			value = value[1 : len(value)-1]
+		} else if value[0] == '[' && value[len(value)-1] == ']' {
+			// Remove square brackets
+			value = value[1 : len(value)-1]
+		}
+	}
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{"*"}
+	}
+	if value == "*" {
+		return []string{"*"}
+	}
+
+	// Split by comma for lists
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return []string{"*"}
+	}
+	return result
+} // StripPrefixSuffix removes specified prefixes and suffixes from a type name
 // prefixList and suffixList are comma-separated strings
 // e.g. "DB,Pg" and "DTO,Entity,Model"
 func StripPrefixSuffix(name, prefixList, suffixList string) string {

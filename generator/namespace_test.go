@@ -92,7 +92,7 @@ type Product struct {
 	}
 
 	// User should be in user/special.graphql (type-level override)
-	userPath := filepath.Join(outDir, "user", "special.graphql")
+	userPath := filepath.Join(outDir, "user", "special.graphqls")
 	if _, err := os.Stat(userPath); err != nil {
 		t.Errorf("Expected user/special.graphql to exist: %v", err)
 	} else {
@@ -103,7 +103,7 @@ type Product struct {
 	}
 
 	// Product should be in common.graphql (file-level namespace)
-	productPath := filepath.Join(outDir, "common.graphql")
+	productPath := filepath.Join(outDir, "common.graphqls")
 	if _, err := os.Stat(productPath); err != nil {
 		t.Errorf("Expected common.graphql to exist: %v", err)
 	} else {
@@ -170,7 +170,7 @@ const (
 	}
 
 	// Enum should be in common/enums.graphql
-	enumPath := filepath.Join(outDir, "common", "enums.graphql")
+	enumPath := filepath.Join(outDir, "common", "enums.graphqls")
 	if _, err := os.Stat(enumPath); err != nil {
 		t.Errorf("Expected common/enums.graphql to exist: %v", err)
 	} else {
@@ -222,7 +222,7 @@ const (
 	}
 
 	// Enum should be in special/status.graphql (directive-level override)
-	enumPath := filepath.Join(outDir, "special", "status.graphql")
+	enumPath := filepath.Join(outDir, "special", "status.graphqls")
 	if _, err := os.Stat(enumPath); err != nil {
 		t.Errorf("Expected special/status.graphql to exist: %v", err)
 	} else {
@@ -305,7 +305,7 @@ type Product struct {
 	}
 
 	// Both should be in api/v1.graphql
-	apiPath := filepath.Join(outDir, "api", "v1.graphql")
+	apiPath := filepath.Join(outDir, "api", "v1.graphqls")
 	if _, err := os.Stat(apiPath); err != nil {
 		t.Errorf("Expected api/v1.graphql to exist: %v", err)
 		return
@@ -363,7 +363,7 @@ type User struct {
 	}
 
 	// Should create user/auth.graphql (dots converted to slashes)
-	userPath := filepath.Join(outDir, "user", "auth.graphql")
+	userPath := filepath.Join(outDir, "user", "auth.graphqls")
 	if _, err := os.Stat(userPath); err != nil {
 		t.Errorf("Expected user/auth.graphql to exist: %v", err)
 	} else {
@@ -418,7 +418,7 @@ type UpdateUser struct {
 	}
 
 	// CreateUserInput should be in inputs.graphql (file-level namespace)
-	inputsPath := filepath.Join(outDir, "inputs.graphql")
+	inputsPath := filepath.Join(outDir, "inputs.graphqls")
 	if _, err := os.Stat(inputsPath); err != nil {
 		t.Errorf("Expected inputs.graphql to exist: %v", err)
 	} else {
@@ -429,7 +429,7 @@ type UpdateUser struct {
 	}
 
 	// UpdateUserInput should be in inputs/user.graphql (directive-level override)
-	updatePath := filepath.Join(outDir, "inputs", "user.graphql")
+	updatePath := filepath.Join(outDir, "inputs", "user.graphqls")
 	if _, err := os.Stat(updatePath); err != nil {
 		t.Errorf("Expected inputs/user.graphql to exist: %v", err)
 	} else {

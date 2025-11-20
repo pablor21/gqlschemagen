@@ -19,7 +19,7 @@
 # - Extra Fields: @gqlTypeExtraField and @gqlInputExtraField
 # See README.md for complete documentation
 
-
+tool_version: "0.1.11"
 
 # Packages to scan for Go structs with gql annotations (required)
 # Supports direct paths to directories containing Go files
