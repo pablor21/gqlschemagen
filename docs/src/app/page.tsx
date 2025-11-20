@@ -304,7 +304,7 @@ type User struct {
               </p>
               <Button
                 as={Link}
-                href="[https://github.com/pablor21/gqlschemagen](https://github.com/pablor21/gqlschemagen)"
+                href="/docs"
                 color="primary"
                 size="lg"
                 startContent={<BookOpen size={18} />}

@@ -29,6 +29,11 @@ const docsNavItems = [
       { label: "Namespaces", href: "/docs/features/namespaces" },
     ],
   },
+  {
+    label: "Integrations",
+    items: [{ label: "GQLGen", href: "/docs/integrations/gqlgen" }],
+  },
+  { label: "CLI Reference", href: "/docs/cli-reference" },
 ];
 
 const getIsActive = (href: string, current: string) => current === href;
@@ -160,8 +165,8 @@ export default function DocsNavbar() {
 
       {/* Mobile menu */}
       <NavbarMenu>
-        <div className="flex flex-col space-y-4 pt-4">
-          <div className="pt-6">
+        <div className="flex flex-col gap-4 pt-4">
+          <div className="flex flex-col gap-2">
             <NavbarMenuItem data-active={isDocsActive}>
               <h3 className="text-xl font-bold mb-3">Documentation</h3>
             </NavbarMenuItem>
@@ -178,7 +183,7 @@ export default function DocsNavbar() {
                     </Link>
                   </NavbarMenuItem>
                 ) : (
-                  <>
+                  <div className="flex flex-col">
                     <h4 className="text-md font-semibold mt-4">{item.label}</h4>
                     {item.items?.map((sub, i) => (
                       <NavbarMenuItem
@@ -191,7 +196,7 @@ export default function DocsNavbar() {
                         </Link>
                       </NavbarMenuItem>
                     ))}
-                  </>
+                  </div>
                 )}
               </React.Fragment>
             ))}

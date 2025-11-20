@@ -6,8 +6,16 @@ import { cn } from "@heroui/react";
 
 export function useMDXComponents(): MDXComponents {
   return {
-    Snippet: ({ className, ...props }) => (
-      <Snippet className={cn("not-prose", className)} {...props} />
+    Snippet: ({ className, classNames, ...props }) => (
+      <Snippet
+        classNames={{
+          ...classNames,
+          base: cn("max-w-full", classNames?.base),
+          pre: cn("flex gap-2 whitespace-pre-wrap leading-5", classNames?.pre),
+        }}
+        className={cn("not-prose", className)}
+        {...props}
+      />
     ),
     Alert: ({ classNames, ...props }) => (
       <Alert
