@@ -66,6 +66,9 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 	for _, cg := range comments {
 		for _, c := range cg.List {
 			text := strings.TrimSpace(c.Text)
+			// normalize single-line comments starting with //
+			text = strings.TrimPrefix(text, "//")
+			text = strings.TrimSpace(text)
 			// normalize block comments starting with /* or /**
 			text = strings.TrimPrefix(text, "/*")
 			text = strings.TrimPrefix(text, "/**")
@@ -79,8 +82,9 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 				line = strings.TrimSpace(line)
 
 				// @gqlType(name:"TypeName",description:"desc",ignoreAll:true,namespace:"api/v1")
-				if strings.HasPrefix(line, "@gqlType(") || line == "@gqlType" {
+				if hasDirectivePrefix(line, "Type(") || hasDirectiveName(line, "Type") {
 					res.HasTypeDirective = true
+					line = normalizeDirective(line)
 					params := parseDirectiveParams(line, "@gqlType")
 
 					typeDef := TypeDefinition{}
@@ -103,9 +107,10 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 				}
 
 				// @gqlInput(name:"InputName",description:"desc",ignoreAll:true,namespace:"api/v1")
-				if strings.HasPrefix(line, "@gqlInput(") || line == "@gqlInput" {
+				if hasDirectivePrefix(line, "Input(") || hasDirectiveName(line, "Input") {
 					res.HasInputDirective = true
 					res.GenInput = true // Enable input generation
+					line = normalizeDirective(line)
 					params := parseDirectiveParams(line, "@gqlInput")
 
 					inputDef := InputDefinition{}
@@ -122,18 +127,51 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 						inputDef.Namespace = namespace
 					}
 					res.Inputs = append(res.Inputs, inputDef)
-				} // @gqlIgnoreAll
-				if strings.HasPrefix(line, "@gqlIgnoreAll") || strings.HasPrefix(line, "@ignoreall") {
+				}
+
+				// @gqlIgnoreAll or @GqlIgnoreAll
+				if hasDirectivePrefix(line, "IgnoreAll") || strings.HasPrefix(line, "@ignoreall") {
 					res.IgnoreAll = true
 				}
 
-				// @gqlUseModelDirective
-				if strings.HasPrefix(line, "@gqlUseModelDirective") {
+				// @gqlUseModelDirective or @GqlUseModelDirective
+				if hasDirectivePrefix(line, "UseModelDirective") {
 					res.UseModelDirective = true
 				}
 
+				// @gqlExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")
+				if hasDirectivePrefix(line, "ExtraField") {
+					line = normalizeDirective(line)
+					params := parseDirectiveParams(line, "@gqlExtraField")
+					if name, ok := params["name"]; ok && name != "" {
+						ef := ExtraField{Name: name, ForType: true, ForInput: true}
+						if typ, ok := params["type"]; ok {
+							ef.Type = typ
+						}
+						if desc, ok := params["description"]; ok {
+							ef.Description = desc
+						}
+						if tags, ok := params["overrideTags"]; ok {
+							ef.OverrideTags = tags
+						}
+						if on, ok := params["on"]; ok {
+							ef.On = strings.Split(on, ",")
+							for i := range ef.On {
+								ef.On[i] = strings.TrimSpace(ef.On[i])
+							}
+						} else {
+							ef.On = []string{"*"}
+						}
+						if ef.Type != "" {
+							res.InputExtraFields = append(res.InputExtraFields, ef)
+							res.TypeExtraFields = append(res.TypeExtraFields, ef)
+						}
+					}
+				}
+
 				// @gqlTypeExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")
-				if strings.HasPrefix(line, "@gqlTypeExtraField") {
+				if hasDirectivePrefix(line, "TypeExtraField") {
+					line = normalizeDirective(line)
 					params := parseDirectiveParams(line, "@gqlTypeExtraField")
 					if name, ok := params["name"]; ok && name != "" {
 						ef := ExtraField{Name: name, ForType: true, ForInput: false}
@@ -161,7 +199,8 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 				}
 
 				// @gqlInputExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")
-				if strings.HasPrefix(line, "@gqlInputExtraField") {
+				if hasDirectivePrefix(line, "InputExtraField") {
+					line = normalizeDirective(line)
 					params := parseDirectiveParams(line, "@gqlInputExtraField")
 					if name, ok := params["name"]; ok && name != "" {
 						ef := ExtraField{Name: name, ForType: false, ForInput: true}
@@ -191,6 +230,24 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 		}
 	}
 	return res
+}
+
+// hasDirectivePrefix checks if line starts with @gql or @Gql followed by the given suffix
+func hasDirectivePrefix(line, suffix string) bool {
+	return strings.HasPrefix(line, "@gql"+suffix) || strings.HasPrefix(line, "@Gql"+suffix)
+}
+
+// hasDirectiveName checks if line exactly matches @gql or @Gql followed by the given name
+func hasDirectiveName(line, name string) bool {
+	return line == "@gql"+name || line == "@Gql"+name
+}
+
+// normalizeDirective converts @Gql to @gql for consistent parsing
+func normalizeDirective(line string) string {
+	if strings.HasPrefix(line, "@Gql") {
+		return "@gql" + strings.TrimPrefix(line, "@Gql")
+	}
+	return line
 }
 
 // parseDirectiveParams parses directive parameters like @directive(name:"value",other:"value2")
@@ -359,7 +416,8 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 			res.Optional = true
 		case "required":
 			res.Required = true
-		case "forceResolver":
+		case "forceResolver",
+			"force_resolver":
 			res.ForceResolver = true
 		case "deprecated":
 			// deprecated - mark as deprecated without reason
@@ -447,7 +505,7 @@ func isAllUpper(s string) bool {
 // isKnownFlag checks if a string is a known gql tag flag
 func isKnownFlag(s string) bool {
 	switch s {
-	case "ignore", "omit", "include", "optional", "required", "forceResolver", "deprecated":
+	case "ignore", "omit", "include", "optional", "required", "forceResolver", "force_resolver", "deprecated":
 		return true
 	}
 	return false

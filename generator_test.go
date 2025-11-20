@@ -9,6 +9,10 @@ import (
 	"github.com/pablor21/gqlschemagen/generator"
 )
 
+// ============================================================================
+// Utility Function Tests
+// ============================================================================
+
 // TestStripPrefixSuffix tests the StripPrefixSuffix function
 func TestStripPrefixSuffix(t *testing.T) {
 	tests := []struct {

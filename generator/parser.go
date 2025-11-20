@@ -250,6 +250,9 @@ func extractFileNamespace(f *ast.File) string {
 func findNamespaceInComments(cg *ast.CommentGroup) string {
 	for _, comment := range cg.List {
 		text := comment.Text
+		// Normalize single-line comments
+		text = strings.TrimPrefix(text, "//")
+		text = strings.TrimSpace(text)
 		// Normalize block comments
 		text = strings.TrimPrefix(text, "/*")
 		text = strings.TrimPrefix(text, "/**")
@@ -261,9 +264,10 @@ func findNamespaceInComments(cg *ast.CommentGroup) string {
 			line = strings.TrimPrefix(line, "*")
 			line = strings.TrimSpace(line)
 
-			// Look for @gqlNamespace(name:"value")
-			if strings.Contains(line, "@gqlNamespace") {
-				if idx := strings.Index(line, "@gqlNamespace"); idx != -1 {
+			// Look for @gqlNamespace or @GqlNamespace(name:"value")
+			lowerLine := strings.ToLower(line)
+			if strings.Contains(lowerLine, "@gqlnamespace") {
+				if idx := strings.Index(lowerLine, "@gqlnamespace"); idx != -1 {
 					rest := line[idx:]
 					// Find name parameter
 					if nameIdx := strings.Index(rest, "name:"); nameIdx != -1 {
@@ -413,13 +417,14 @@ func (p *Parser) GetPackageImportPathFromFile(filePath string, pkgName string, m
 	return modelPath
 }
 
-// hasGqlEnumDirective checks if a GenDecl has @gqlEnum directive in its doc comments
+// hasGqlEnumDirective checks if a GenDecl has @gqlEnum or @GqlEnum directive in its doc comments
 func hasGqlEnumDirective(decl *ast.GenDecl) bool {
 	if decl.Doc == nil {
 		return false
 	}
 	for _, comment := range decl.Doc.List {
-		if strings.Contains(comment.Text, "@gqlEnum") {
+		text := strings.ToLower(comment.Text)
+		if strings.Contains(text, "@gqlenum") {
 			return true
 		}
 	}
@@ -600,7 +605,7 @@ func (p *Parser) extractConstValue(expr ast.Expr, iotaValue int, baseType string
 	return ""
 }
 
-// parseValueDirective extracts @gqlEnumValue directive from comment
+// parseValueDirective extracts @gqlEnumValue or @GqlEnumValue directive from comment
 func (p *Parser) parseValueDirective(commentGroup *ast.CommentGroup, goName string, enumTypeName string) (graphQLName, description, deprecated string) {
 	// Default: auto-generate GraphQL name by stripping enum type prefix
 	graphQLName = stripEnumPrefix(goName, enumTypeName)
@@ -614,8 +619,9 @@ func (p *Parser) parseValueDirective(commentGroup *ast.CommentGroup, goName stri
 	for _, comment := range commentGroup.List {
 		text := comment.Text
 
-		// Extract @gqlEnumValue directive
-		if strings.Contains(text, "@gqlEnumValue") {
+		// Extract @gqlEnumValue or @GqlEnumValue directive
+		lowerText := strings.ToLower(text)
+		if strings.Contains(lowerText, "@gqlenumvalue") {
 			hasDirective = true
 			// Parse @gqlEnumValue(name:"CUSTOM_NAME", description:"...", deprecated:"...")
 			if name := extractDirectiveParam(text, "name"); name != "" {
@@ -665,7 +671,7 @@ func toScreamingSnakeCase(s string) string {
 	return strings.ToUpper(string(result))
 }
 
-// parseEnumDirective extracts custom name, description, and namespace from @gqlEnum directive
+// parseEnumDirective extracts custom name, description, and namespace from @gqlEnum or @GqlEnum directive
 // Returns (customName or defaultName, description, namespace)
 func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (string, string, string) {
 	name := defaultName
@@ -678,6 +684,9 @@ func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (str
 
 	for _, comment := range commentGroup.List {
 		text := comment.Text
+		// Normalize single-line comments
+		text = strings.TrimPrefix(text, "//")
+		text = strings.TrimSpace(text)
 		// Normalize block comments
 		text = strings.TrimPrefix(text, "/*")
 		text = strings.TrimPrefix(text, "/**")
@@ -689,8 +698,9 @@ func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (str
 			line = strings.TrimPrefix(line, "*")
 			line = strings.TrimSpace(line)
 
-			// Check for @gqlEnum directive
-			if strings.HasPrefix(line, "@gqlEnum") {
+			// Check for @gqlEnum or @GqlEnum directive
+			lowerLine := strings.ToLower(line)
+			if strings.HasPrefix(lowerLine, "@gqlenum") {
 				// Extract name parameter if present
 				if customName := extractDirectiveParam(line, "name"); customName != "" {
 					name = customName
