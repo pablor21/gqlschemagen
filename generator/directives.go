@@ -555,22 +555,23 @@ func splitParamsWithLists(s string) []string {
 		c := s[i]
 
 		if !inQuotes && !inBrackets {
-			if c == '\'' || c == '"' {
+			switch c {
+			case '\'', '"':
 				// Opening quote
 				inQuotes = true
 				quoteChar = c
 				current.WriteByte(c)
-			} else if c == '[' {
+			case '[':
 				// Opening bracket
 				inBrackets = true
 				current.WriteByte(c)
-			} else if c == ',' {
+			case ',':
 				// Comma outside quotes/brackets separates parameters
 				if current.Len() > 0 {
 					parts = append(parts, current.String())
 					current.Reset()
 				}
-			} else {
+			default:
 				current.WriteByte(c)
 			}
 		} else if inQuotes {
@@ -596,19 +597,19 @@ func splitParamsWithLists(s string) []string {
 }
 
 // isListKey checks if a key:value string has a key that expects a list
-func isListKey(s string) bool {
-	s = strings.TrimSpace(s)
-	if !strings.Contains(s, ":") {
-		return false
-	}
-	key := strings.SplitN(s, ":", 2)[0]
-	key = strings.TrimSpace(key)
-	switch key {
-	case "include", "omit", "ignore", "rw", "ro", "wo":
-		return true
-	}
-	return false
-}
+// func isListKey(s string) bool {
+// 	s = strings.TrimSpace(s)
+// 	if !strings.Contains(s, ":") {
+// 		return false
+// 	}
+// 	key := strings.SplitN(s, ":", 2)[0]
+// 	key = strings.TrimSpace(key)
+// 	switch key {
+// 	case "include", "omit", "ignore", "rw", "ro", "wo":
+// 		return true
+// 	}
+// 	return false
+// }
 
 // ResolveFieldName resolves field name based on config and tags
 // Priority: gql tag name > json tag > struct field name (case transformation only applies to struct field)
