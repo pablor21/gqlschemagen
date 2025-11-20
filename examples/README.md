@@ -6,12 +6,14 @@ This directory contains examples of how to use `gqlschemagen` as a CLI tool.
 
 ```
 examples/
-├── cli/                    # CLI usage example
-│   ├── models/            # Go structs with gql annotations
-│   └── gqlschemagen.yml   # Configuration file
-├── embedded-structs.go    # Example of embedded struct handling
-├── extra-fields-demo.go   # Example of extra fields directives
-└── multiple-annotations.go # Example of multiple annotations
+├── cli/                           # CLI usage example
+│   ├── models/                   # Go structs with gql annotations
+│   └── gqlschemagen.yml          # Configuration file
+├── embedded-structs.go           # Example of embedded struct handling
+├── extra-fields-demo.go          # Example of extra fields directives
+├── generics-relay-connections.go # Example of Go generics support (Relay connections)
+├── multiple-annotations.go       # Example of multiple annotations
+└── field-filtering.go            # Example of field filtering
 ```
 
 ## Quick Start

@@ -48,7 +48,9 @@ func StartWatch(cfg *generator.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create watcher: %w", err)
 	}
-	defer watcher.Close()
+	defer func() {
+		_ = watcher.Close()
+	}()
 	w.watcher = watcher
 
 	// Add all package directories to watch

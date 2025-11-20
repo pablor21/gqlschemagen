@@ -1122,6 +1122,12 @@ func (g *Generator) expandEmbeddedFieldNamed(f *ast.Field, d StructDirectives, i
 	case *ast.SelectorExpr:
 		// Handle embedded struct from another package (e.g., pkg.Type)
 		embeddedTypeName = t.Sel.Name
+	case *ast.IndexExpr:
+		// Handle generic type with single type parameter (e.g., Connection[T])
+		embeddedTypeName = g.extractGenericBaseName(t.X)
+	case *ast.IndexListExpr:
+		// Handle generic type with multiple type parameters (e.g., Map[K, V])
+		embeddedTypeName = g.extractGenericBaseName(t.X)
 	}
 
 	if embeddedTypeName == "" {
@@ -1141,6 +1147,22 @@ func (g *Generator) expandEmbeddedFieldNamed(f *ast.Field, d StructDirectives, i
 	}
 
 	return g.generateFieldsForTypeNamed(embeddedStruct, embeddedDirectives, false, forInput, typeName)
+}
+
+// extractGenericBaseName extracts the base type name from a generic type expression
+// For example: Connection[T] -> "Connection", pkg.Edge[T] -> "Edge"
+func (g *Generator) extractGenericBaseName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		// Handle package-qualified generic types (e.g., pkg.Type[T])
+		return t.Sel.Name
+	case *ast.StarExpr:
+		// Handle pointer to generic type (e.g., *Connection[T])
+		return g.extractGenericBaseName(t.X)
+	}
+	return ""
 }
 
 // generateEnum generates a GraphQL enum definition from an EnumType

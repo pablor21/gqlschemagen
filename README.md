@@ -21,6 +21,7 @@ Generate GraphQL schemas directly from your Go models and DTOs.
 - Automatically generate GraphQL types from Go structs.
 - Supports input and output types.
 - Works with standard Go structs.
+- **Full support for Go generics** - embed generic types seamlessly.
 - Simple CLI for quick schema generation.
 
 > For advanced features like integration with GQLGen, annotations, struct tags, and configuration, see the [full documentation](https://pablor21.github.io/gqlschemagen).
