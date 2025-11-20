@@ -46,13 +46,13 @@ custom naming strategies, and extensive configuration options.
 - 📝 **Struct Tag Support**: Fine-grained control via struct tags
 - 🔄 **Flexible Field Naming**: Multiple case transformations (camel, snake, pascal)
 - 📦 **Generation Strategies**: Single file, multiple files, or per-package files
-- 🗂️ **Namespace Organization**: Organize schemas into subdirectories using @gqlNamespace
+- 🗂️ **Namespace Organization**: Organize schemas into subdirectories using @GqlNamespace
 - 🎨 **[gqlgen](https://github.com/99designs/gqlgen) Integration**: Automatic @goModel and @goField directives
 - 📋 **Input Type Generation**: Auto-generate GraphQL Input types
 - 📚 **Field Descriptions**: Extract from struct tags or comments
 - ⚙️ **Highly Configurable**: CLI flags and per-struct customization
 - 🧩 **Embedded Struct Support**: Automatically expand embedded struct fields into parent types
-- ➕ **Extra Fields**: Add resolver-only fields to types and inputs with @gqlTypeExtraField and @gqlInputExtraField
+- ➕ **Extra Fields**: Add resolver-only fields to types and inputs with @GqlExtraField, @GqlTypeExtraField and @GqlInputExtraField
 
 ## Installation
 
@@ -356,7 +356,7 @@ generate: schema codegen
 
 schema:
 	@echo "Generating GraphQL schemas..."
-	@gqlschemagen generate
+	@Gqlschemagen generate
 
 codegen:
 	@echo "Generating gqlgen code..."
@@ -406,8 +406,8 @@ This approach lets you:
 ### Important: Opt-in Generation
 
 **Types and inputs are only generated for structs that have the appropriate directives:**
-- Use `@gqlType()` to generate a GraphQL type
-- Use `@gqlInput()` to generate a GraphQL input
+- Use `@GqlType()` to generate a GraphQL type
+- Use `@GqlInput()` to generate a GraphQL input
 - Structs without these directives are **skipped**
 
 This opt-in approach gives you precise control over what gets generated.
@@ -416,12 +416,12 @@ This opt-in approach gives you precise control over what gets generated.
 
 Add these as block comments (`/** */`) above your struct declaration:
 
-#### `@gqlType(name:"TypeName",description:"desc",ignoreAll:true)`
+#### `@GqlType(name:"TypeName",description:"desc",ignoreAll:true)`
 Specify the GraphQL type name and optional description.
 
 ```go
 /**
- * @gqlType(name:"UserProfile",description:"Represents a user in the system")
+ * @GqlType(name:"UserProfile",description:"Represents a user in the system")
  */
 type User struct {
     ID   string
@@ -446,15 +446,15 @@ type UserProfile @goModel(model: "your-package.User") {
 **Notes:**
 - If you don't specify a name, the generator will apply prefix/suffix stripping and adding based on CLI flags
 - Custom names bypass all transformations
-- `ignoreAll:true` works like `@gqlIgnoreAll` but only for the type, not the input
+- `ignoreAll:true` works like `@GqlIgnoreAll` but only for the type, not the input
 
-#### `@gqlInput(name:"InputName",description:"desc",ignoreAll:true)`
+#### `@GqlInput(name:"InputName",description:"desc",ignoreAll:true)`
 Generate an Input type with optional custom name and description.
 
 ```go
 /**
- * @gqlType()
- * @gqlInput(name:"CreateUserInput",description:"Input for creating a user")
+ * @GqlType()
+ * @GqlInput(name:"CreateUserInput",description:"Input for creating a user")
  */
 type User struct {
     Name  string
@@ -480,12 +480,12 @@ input CreateUserInput @goModel(model: "your-package.User") {
 - `name` (optional): Custom input name. If omitted, generates `{TypeName}Input`
 - `description` (optional): Input description
 
-#### `@gqlIgnoreAll`
+#### `@GqlIgnoreAll`
 Ignore all fields by default (use with `include` tag to selectively include).
 
 ```go
 /**
- * @gqlIgnoreAll
+ * @GqlIgnoreAll
  */
 type InternalUser struct {
     ID       string `gql:"include"`  // Only this field will be exported
@@ -494,12 +494,12 @@ type InternalUser struct {
 }
 ```
 
-#### `@gqlUseModelDirective`
+#### `@GqlUseModelDirective`
 Force @goModel directive for this type (even if UseGqlGenDirectives is false).
 
 ```go
 /**
- * @gqlUseModelDirective
+ * @GqlUseModelDirective
  */
 type User struct {
     ID string
@@ -513,15 +513,15 @@ type User @goModel(model: "your-package.User") {
 }
 ```
 
-#### `@gqlTypeExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")`
+#### `@GqlTypeExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")`
 Add extra fields only to GraphQL types (not inputs). Useful for resolver-only fields. Can be used multiple times.
 
 ```go
 /**
- * @gqlType(name:"User")
- * @gqlInput(name:"UserInput")
- * @gqlTypeExtraField(name:"posts",type:"[Post!]!",description:"User's posts")
- * @gqlTypeExtraField(name:"followers",type:"[User!]!",description:"Followers list")
+ * @GqlType(name:"User")
+ * @GqlInput(name:"UserInput")
+ * @GqlTypeExtraField(name:"posts",type:"[Post!]!",description:"User's posts")
+ * @GqlTypeExtraField(name:"followers",type:"[User!]!",description:"Followers list")
  */
 type User struct {
     ID       string
@@ -560,11 +560,11 @@ input UserInput @goModel(model: "your-package.User") {
 
 ```go
 /**
- * @gqlType(name:"Article")
- * @gqlType(name:"BlogPost")
- * @gqlTypeExtraField(name:"author",type:"User!",description:"Article author",on:"Article")
- * @gqlTypeExtraField(name:"writer",type:"User!",description:"Blog writer",on:"BlogPost")
- * @gqlTypeExtraField(name:"comments",type:"[Comment!]!",description:"Comments")
+ * @GqlType(name:"Article")
+ * @GqlType(name:"BlogPost")
+ * @GqlTypeExtraField(name:"author",type:"User!",description:"Article author",on:"Article")
+ * @GqlTypeExtraField(name:"writer",type:"User!",description:"Blog writer",on:"BlogPost")
+ * @GqlTypeExtraField(name:"comments",type:"[Comment!]!",description:"Comments")
  */
 type Content struct {
     ID    string
@@ -595,15 +595,15 @@ type BlogPost {
 }
 ```
 
-#### `@gqlInputExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")`
+#### `@GqlInputExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Input1,Input2")`
 Add extra fields only to GraphQL inputs (not types). Useful for input-specific fields like passwords.
 
 ```go
 /**
- * @gqlType(name:"User")
- * @gqlInput(name:"CreateUserInput")
- * @gqlInput(name:"UpdateUserInput")
- * @gqlInputExtraField(name:"password",type:"String!",description:"User password",on:"CreateUserInput")
+ * @GqlType(name:"User")
+ * @GqlInput(name:"CreateUserInput")
+ * @GqlInput(name:"UpdateUserInput")
+ * @GqlInputExtraField(name:"password",type:"String!",description:"User password",on:"CreateUserInput")
  */
 type User struct {
     ID       string
@@ -648,21 +648,64 @@ input UpdateUserInput {
 - The `on` parameter accepts `*` (all), specific type/input names, or comma-separated lists
 - These fields must be implemented as resolvers (for types) or handled in your input processing (for inputs)
 
-#### `@gqlEnum(name:"EnumName",description:"desc")`
+
+#### `@GqlExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")`
+
+Add extra fields to both GraphQL types and inputs. Useful for fields that should exist in both representations.
+
+```go/**
+ * @GqlType(name:"User")
+ * @GqlInput(name:"UserInput")
+ * @GqlExtraField(name:"createdAt",type:"String!",description:"Creation timestamp")
+ */
+type User struct {
+    ID       string
+    Username string
+    Email    string
+}
+``` 
+
+Generates:
+```graphql
+type User @goModel(model: "your-package.User") {
+    id: ID!
+    username: String!
+    email: String!
+    """Creation timestamp"""
+    createdAt: String! @goField(forceResolver: true)
+}
+
+input UserInput {
+    id: ID!
+    username: String!
+    email: String!
+    """Creation timestamp"""
+    createdAt: String!
+}
+```
+
+**Parameters:**
+- `name` (required): Field name in the GraphQL schema
+- `type` (required): GraphQL type (e.g., `String!`, `[Post!]!`, `User`)
+- `description` (optional): Field description
+- `on` (optional): Comma-separated list of type/input names to apply this field to. Defaults to `*` (all types and inputs)  
+
+
+#### `@GqlEnum(name:"EnumName",description:"desc")`
 Define a GraphQL enum type from a Go type and its constants.
 
 Supports both string-based and int-based enums (including iota).
 
 ```go
 /**
- * @gqlEnum(name:"Role", description:"User role in the system")
+ * @GqlEnum(name:"Role", description:"User role in the system")
  */
 type UserRole string
 
 const (
-	UserRoleAdmin  UserRole = "admin"  // @gqlEnumValue(name:"ADMIN", description:"Administrator with full access")
-	UserRoleEditor UserRole = "editor" // @gqlEnumValue(name:"EDITOR", description:"Can edit content")
-	UserRoleViewer UserRole = "viewer" // @gqlEnumValue(name:"VIEWER", description:"Read-only access")
+	UserRoleAdmin  UserRole = "admin"  // @GqlEnumValue(name:"ADMIN", description:"Administrator with full access")
+	UserRoleEditor UserRole = "editor" // @GqlEnumValue(name:"EDITOR", description:"Can edit content")
+	UserRoleViewer UserRole = "viewer" // @GqlEnumValue(name:"VIEWER", description:"Read-only access")
 )
 ```
 
@@ -701,16 +744,16 @@ enum Role {
 
 ```go
 /**
- * @gqlEnum
+ * @GqlEnum
  * Permission level for resources
  */
 type Permission int
 
 const (
-	PermissionNone  Permission = iota // @gqlEnumValue(name:"NONE", description:"No permissions")
-	PermissionRead                    // @gqlEnumValue(name:"READ", description:"Read access")
-	PermissionWrite                   // @gqlEnumValue(name:"WRITE", description:"Write access")
-	PermissionAdmin                   // @gqlEnumValue(name:"ADMIN", description:"Full administrative access")
+	PermissionNone  Permission = iota // @GqlEnumValue(name:"NONE", description:"No permissions")
+	PermissionRead                    // @GqlEnumValue(name:"READ", description:"Read access")
+	PermissionWrite                   // @GqlEnumValue(name:"WRITE", description:"Write access")
+	PermissionAdmin                   // @GqlEnumValue(name:"ADMIN", description:"Full administrative access")
 )
 ```
 
@@ -744,13 +787,13 @@ enum Permission {
 
 **Auto-generated names:**
 
-If you don't specify `@gqlEnumValue(name:"...")`, names are auto-generated by:
+If you don't specify `@GqlEnumValue(name:"...")`, names are auto-generated by:
 1. Stripping the enum type name prefix (e.g., `UserRoleAdmin` → `Admin`)
 2. Converting to SCREAMING_SNAKE_CASE (e.g., `Admin` → `ADMIN`)
 
 ```go
 /**
- * @gqlEnum
+ * @GqlEnum
  */
 type Status string
 
@@ -772,14 +815,14 @@ enum Status {
 
 ```go
 /**
- * @gqlEnum
+ * @GqlEnum
  */
 type OrderStatus string
 
 const (
-	OrderStatusPending   OrderStatus = "pending"   // @gqlEnumValue(name:"PENDING")
-	OrderStatusCancelled OrderStatus = "cancelled" // @gqlEnumValue(name:"CANCELLED", deprecated:"Use REJECTED instead")
-	OrderStatusRejected  OrderStatus = "rejected"  // @gqlEnumValue(name:"REJECTED")
+	OrderStatusPending   OrderStatus = "pending"   // @GqlEnumValue(name:"PENDING")
+	OrderStatusCancelled OrderStatus = "cancelled" // @GqlEnumValue(name:"CANCELLED", deprecated:"Use REJECTED instead")
+	OrderStatusRejected  OrderStatus = "rejected"  // @GqlEnumValue(name:"REJECTED")
 )
 ```
 
@@ -796,7 +839,7 @@ enum OrderStatus {
 
 ```go
 /**
- * @gqlType
+ * @GqlType
  */
 type User struct {
 	ID   string   `gql:"id,type:ID"`
@@ -804,7 +847,7 @@ type User struct {
 }
 ```
 
-**Parameters for `@gqlEnumValue`:**
+**Parameters for `@GqlEnumValue`:**
 - `name` (optional): Custom GraphQL enum value name. If omitted, auto-generated from const name
 - `description` (optional): Value description
 - `deprecated` (optional): Deprecation reason
@@ -822,7 +865,7 @@ type User struct {
 // types/status.go
 package types
 
-// @gqlEnum
+// @GqlEnum
 type Status string
 
 // constants/status_values.go  
@@ -838,7 +881,7 @@ const (
 ```
 
 
-#### `@gqlNamespace(name:"path/to/namespace")`
+#### `@GqlNamespace(name:"path/to/namespace")`
 
 Organize generated schema files into subdirectories using namespaces. This is particularly useful for large projects with many types.
 
@@ -848,11 +891,11 @@ Organize generated schema files into subdirectories using namespaces. This is pa
 package models
 
 /**
- * @gqlNamespace(name:"api/v1")
+ * @GqlNamespace(name:"api/v1")
  */
 
 /**
- * @gqlType(name:"User")
+ * @GqlType(name:"User")
  */
 type User struct {
 	ID   string `gql:"id,type:ID"`
@@ -860,7 +903,7 @@ type User struct {
 }
 
 /**
- * @gqlType(name:"Product")
+ * @GqlType(name:"Product")
  */
 type Product struct {
 	ID    string `gql:"id,type:ID"`
@@ -880,18 +923,18 @@ You can override the file-level namespace for specific types:
 
 ```go
 /**
- * @gqlNamespace(name:"common")
+ * @GqlNamespace(name:"common")
  */
 
 /**
- * @gqlType(name:"User",namespace:"user/auth")
+ * @GqlType(name:"User",namespace:"user/auth")
  */
 type User struct {
 	ID string `gql:"id,type:ID"`
 }
 
 /**
- * @gqlType(name:"Product")
+ * @GqlType(name:"Product")
  */
 type Product struct {
 	ID string `gql:"id,type:ID"`
@@ -908,17 +951,17 @@ Enums also support namespaces:
 
 ```go
 /**
- * @gqlNamespace(name:"common/enums")
+ * @GqlNamespace(name:"common/enums")
  */
 
 /**
- * @gqlEnum(name:"Status")
+ * @GqlEnum(name:"Status")
  */
 type Status string
 
 const (
-	StatusActive   Status = "active"   // @gqlEnumValue(name:"ACTIVE")
-	StatusInactive Status = "inactive" // @gqlEnumValue(name:"INACTIVE")
+	StatusActive   Status = "active"   // @GqlEnumValue(name:"ACTIVE")
+	StatusInactive Status = "inactive" // @GqlEnumValue(name:"INACTIVE")
 )
 ```
 
@@ -926,7 +969,7 @@ Or override per-enum:
 
 ```go
 /**
- * @gqlEnum(name:"Status",namespace:"special/status")
+ * @GqlEnum(name:"Status",namespace:"special/status")
  */
 type Status string
 ```
@@ -938,15 +981,15 @@ Types from different files with the same namespace are combined into one file wh
 ```go
 // user.go
 /**
- * @gqlNamespace(name:"api/v1")
- * @gqlType(name:"User")
+ * @GqlNamespace(name:"api/v1")
+ * @GqlType(name:"User")
  */
 type User struct { ID string }
 
 // product.go  
 /**
- * @gqlNamespace(name:"api/v1")
- * @gqlType(name:"Product")
+ * @GqlNamespace(name:"api/v1")
+ * @GqlType(name:"Product")
  */
 type Product struct { ID string }
 ```
@@ -972,8 +1015,8 @@ namespace_separator: "/"  # Default: creates subdirectories
 - `name` (required): The namespace path (e.g., `"api/v1"`, `"user/auth"`, `"common"`)
 
 **Notes:**
-- File-level `@gqlNamespace` must appear before any type/enum/input definitions
-- Type-level `namespace` parameter in `@gqlType`, `@gqlInput`, or `@gqlEnum` overrides file-level namespace
+- File-level `@GqlNamespace` must appear before any type/enum/input definitions
+- Type-level `namespace` parameter in `@GqlType`, `@GqlInput`, or `@GqlEnum` overrides file-level namespace
 - Namespaces are optional - types without namespaces generate to the root output directory
 - When using single strategy without namespaces, all types go into one file
 
@@ -1001,12 +1044,22 @@ Control individual field behavior with `gql:` struct tag. The first part is alwa
 | `description:value` | Field description | `gql:"email,description:User's email"` |
 | `deprecated` | Mark field as deprecated (boolean) | `gql:"oldField,deprecated"` |
 | `deprecated:value` | Mark field as deprecated with reason | `gql:"oldField,deprecated:\"Use newField instead\""` |
-| `ignore` | Skip this field | `gql:"ignore"` |
-| `omit` | Alias for ignore | `gql:"omit"` |
-| `include` | Include even if @gqlIgnoreAll | `gql:"include"` |
+| `ignore\|omit [:list of types]` | Skip this field (optionally for specific types) | `gql:"ignore\|omit"` |
+| `include[:list of types]` | Include even if @GqlIgnoreAll (optionally for specific types) | `gql:"include"` |
 | `optional` | Make field nullable (remove !) | `gql:"age,optional"` |
 | `required` | Force non-null (add !) | `gql:"email,required"` |
 | `forceResolver` | Add @goField(forceResolver: true) | `gql:"author,forceResolver"` |
+| `ro[:list of types]` | Read-only field (omit from inputs) | `gql:"createdAt,ro"` |
+| `wo[:list of types]` | Write-only field (omit from types) | `gql:"password,wo"` |
+| `rw[:list of types]` | Read-write field (include in both types and inputs) | `gql:"name,rw"` |
+
+#### Notes
+
+- `omit` and `ignore` are aliases (identical behavior)
+- When using type lists, separate names with commas and **NO SPACES**
+- The `:` is optional for flags without lists (e.g., `ro` is same as `ro:*`)
+- Type names in lists must match the names in `@GqlType` or `@GqlInput` directives
+- Combine with other tags: `gql:"fieldName,type:ID,ro,description:\"Read-only ID\""`
 
 #### Examples
 
@@ -1029,7 +1082,7 @@ type User struct {
     // Ignored field
     Internal string `gql:"ignore"`
     
-    // Include in @gqlIgnoreAll type
+    // Include in @GqlIgnoreAll type
     PublicID string `gql:"include"`
 }
 ```
@@ -1240,28 +1293,28 @@ gqlschemagen generate [flags]
 
 --strip-prefix string
     Comma-separated list of prefixes to strip from type names (e.g., 'DB,Pg')
-    Only applies when @gqlType doesn't specify a custom name
+    Only applies when @GqlType doesn't specify a custom name
     Example: DBUser -> User, PgProduct -> Product
 
 --strip-suffix string
     Comma-separated list of suffixes to strip from type names (e.g., 'DTO,Entity,Model')
-    Only applies when @gqlType doesn't specify a custom name
+    Only applies when @GqlType doesn't specify a custom name
     Example: UserDTO -> User, PostEntity -> Post
 
 --add-type-prefix string
-    Prefix to add to GraphQL type names (unless @gqlType specifies custom name)
+    Prefix to add to GraphQL type names (unless @GqlType specifies custom name)
     Example: 'Gql' converts User -> GqlUser
 
 --add-type-suffix string
-    Suffix to add to GraphQL type names (unless @gqlType specifies custom name)
+    Suffix to add to GraphQL type names (unless @GqlType specifies custom name)
     Example: 'Type' converts User -> UserType
 
 --add-input-prefix string
-    Prefix to add to GraphQL input names (unless @gqlInput specifies custom name)
+    Prefix to add to GraphQL input names (unless @GqlInput specifies custom name)
     Example: 'Input' converts CreateUserInput -> InputCreateUserInput
 
 --add-input-suffix string
-    Suffix to add to GraphQL input names (unless @gqlInput specifies custom name)
+    Suffix to add to GraphQL input names (unless @GqlInput specifies custom name)
     Example: 'Payload' converts CreateUserInput -> CreateUserInputPayload
     
 --schema-file-name string
@@ -1269,7 +1322,7 @@ gqlschemagen generate [flags]
     Available placeholders: {model_name}, {type_name}
 
 --namespace-separator string
-    Separator character for namespace paths when using @gqlNamespace (default: "/")
+    Separator character for namespace paths when using @GqlNamespace (default: "/")
     "/" creates subdirectories (e.g., api/v1/User.graphql)
     "." creates flat files with dots (e.g., api.v1.User.graphql)
     
@@ -1452,11 +1505,11 @@ output_file_extension: .graphqls
 **You can preserve manual modifications in generated schema files by using special markers:**
 
 ```graphql
-# @gqlKeepBegin
+# @GqlKeepBegin
 # Your custom schema modifications here
-# @gqlKeepEnd
+# @GqlKeepEnd
 ```
-Anything between `# @gqlKeepBegin` and `# @gqlKeepEnd` will be preserved during regeneration.
+Anything between `# @GqlKeepBegin` and `# @GqlKeepEnd` will be preserved during regeneration.
 
 You can place these markers anywhere in the generated schema file. The generator will retain the content between them when regenerating the schema.
 
@@ -1466,8 +1519,8 @@ It's possiblle to set the placement of the code to be kept using the configurati
 # GQLKeep preserved sections markers
 # Placement of the preserved sections (options: "start", "end")
 keep_section_placement: "end"
-keep_begin_marker: "# @gqlKeepBegin"
-keep_end_marker: "# @gqlKeepEnd"
+keep_begin_marker: "# @GqlKeepBegin"
+keep_end_marker: "# @GqlKeepEnd"
 ```
 
 ## Examples
@@ -1503,9 +1556,9 @@ type User @goModel(model: "jobix.com/backend/internal/domain/entities.User") {
 ### Example 2: Custom Type Name with Input
 
 ```go
-// @gqlType:UserProfile
-// @gqlInput:UpdateUserInput
-// @gqlType(description:User profile information
+// @GqlType:UserProfile
+// @GqlInput:UpdateUserInput
+// @GqlType(description:User profile information
 type User struct {
     ID        string    `gql:"type:ID,description:Unique identifier"`
     Email     string    `gql:"type:Email,required:,description:Email address"`
@@ -1557,7 +1610,7 @@ input UpdateUserInput @goModel(model: "jobix.com/backend/internal/domain/entitie
 ### Example 3: Selective Field Export
 
 ```go
-// @gqlIgnoreAll
+// @GqlIgnoreAll
 type SecureUser struct {
     ID           string `gql:"include:,type:ID"`
     Email        string `gql:"include:"`
@@ -1661,7 +1714,7 @@ graph/schema/generated/
 package users
 
 /**
- * @gqlType()
+ * @GqlType()
  */
 type User struct {
     ID    string `gql:"type:ID"`
@@ -1672,7 +1725,7 @@ type User struct {
 package users
 
 /**
- * @gqlType()
+ * @GqlType()
  */
 type Profile struct {
     UserID string `gql:"type:ID"`
@@ -1683,7 +1736,7 @@ type Profile struct {
 package posts
 
 /**
- * @gqlType()
+ * @GqlType()
  */
 type Post struct {
     ID     string `gql:"type:ID"`
@@ -1748,7 +1801,7 @@ autobind:
 1. Define your domain entities with annotations:
 ```go
 /**
- * @gqlType()
+ * @GqlType()
  */
 type User struct {
     ID        string    `gql:"type:ID"`
@@ -1823,7 +1876,7 @@ gqlschemagen generate \
 package domain
 
 /**
- * @gqlType
+ * @GqlType
  * UserDTO becomes "User" in GraphQL
  */
 type UserDTO struct {
@@ -1832,7 +1885,7 @@ type UserDTO struct {
 }
 
 /**
- * @gqlType
+ * @GqlType
  * PostEntity becomes "Post" in GraphQL
  */
 type PostEntity struct {
@@ -1841,7 +1894,7 @@ type PostEntity struct {
 }
 
 /**
- * @gqlType
+ * @GqlType
  * DBProduct becomes "Product" in GraphQL
  */
 type DBProduct struct {
@@ -1850,7 +1903,7 @@ type DBProduct struct {
 }
 
 /**
- * @gqlType(name:"CustomName")
+ * @GqlType(name:"CustomName")
  * Custom name overrides stripping
  */
 type CategoryDTO struct {
@@ -1859,8 +1912,8 @@ type CategoryDTO struct {
 }
 
 /**
- * @gqlType
- * @gqlInput
+ * @GqlType
+ * @GqlInput
  * OrderDTO becomes "Order" type and "OrderInput"
  */
 type OrderDTO struct {
@@ -1903,7 +1956,7 @@ input OrderInput @goModel(model: "domain.OrderDTO") {
 ```
 
 **Notes:**
-- Stripping only applies when `@gqlType` or `@gqlInput` doesn't specify a custom name
+- Stripping only applies when `@GqlType` or `@GqlInput` doesn't specify a custom name
 - For input types, the base name is stripped, then "Input" is appended
 - Only one prefix and one suffix are stripped per type (first match wins)
 - Use commas to separate multiple prefixes/suffixes
@@ -1924,7 +1977,7 @@ gqlschemagen generate \
 package domain
 
 /**
- * @gqlType
+ * @GqlType
  */
 type User struct {
     ID   string
@@ -1932,8 +1985,8 @@ type User struct {
 }
 
 /**
- * @gqlType
- * @gqlInput
+ * @GqlType
+ * @GqlInput
  */
 type CreateOrder struct {
     UserID    string
@@ -1941,7 +1994,7 @@ type CreateOrder struct {
 }
 
 /**
- * @gqlType(name:"CustomTypeName")
+ * @GqlType(name:"CustomTypeName")
  * Custom name overrides additions
  */
 type Product struct {
@@ -1972,7 +2025,7 @@ type CustomTypeName @goModel(model: "domain.Product") {
 ```
 
 **Notes:**
-- Additions only apply when `@gqlType` or `@gqlInput` doesn't specify a custom name
+- Additions only apply when `@GqlType` or `@GqlInput` doesn't specify a custom name
 - For inputs, prefix/suffix are added AFTER "Input" is appended
 - Can combine with stripping: strip first, then add
 
@@ -1991,8 +2044,8 @@ gqlschemagen generate \
 
 ```go
 /**
- * @gqlType
- * @gqlInput
+ * @GqlType
+ * @GqlInput
  */
 type UserDTO struct {
     ID   string
@@ -2024,7 +2077,7 @@ input UserInputPayload @goModel(model: "domain.UserDTO") {
 ```
 
 **Notes:**
-- Stripping only applies when `@gqlType` or `@gqlInput` doesn't specify a custom name
+- Stripping only applies when `@GqlType` or `@GqlInput` doesn't specify a custom name
 - For input types, the base name is stripped, then "Input" is appended
 - Only one prefix and one suffix are stripped per type (first match wins)
 - Use commas to separate multiple prefixes/suffixes
@@ -2057,7 +2110,7 @@ type Base struct {
 }
 
 /**
- * @gqlType(name:"Article")
+ * @GqlType(name:"Article")
  */
 type Article struct {
     Base           // Embedded struct - fields will be expanded
@@ -2096,8 +2149,8 @@ type Identifiable struct {
 }
 
 /**
- * @gqlType(name:"BlogPost")
- * @gqlInput(name:"BlogPostInput")
+ * @GqlType(name:"BlogPost")
+ * @GqlInput(name:"BlogPostInput")
  */
 type BlogPost struct {
     Identifiable // Embedded - ID field will be included
@@ -2137,17 +2190,17 @@ Field annotations on embedded struct fields are preserved:
 // Metadata provides metadata fields
 type Metadata struct {
     /**
-     * @gqlField(description:"Tags for categorization")
+     * @GqlField(description:"Tags for categorization")
      */
     Tags []string `json:"tags"`
     /**
-     * @gqlField(name:"viewCount",description:"Number of views")
+     * @GqlField(name:"viewCount",description:"Number of views")
      */
     Views int `json:"views"`
 }
 
 /**
- * @gqlType(name:"ContentWithMetadata",description:"Content with embedded metadata")
+ * @GqlType(name:"ContentWithMetadata",description:"Content with embedded metadata")
  */
 type ContentWithMetadata struct {
     Base
@@ -2176,7 +2229,7 @@ type ContentWithMetadata {
 #### Notes on Embedded Structs
 
 - Embedded struct fields are recursively expanded into the parent type
-- All field annotations (`@gqlField`, struct tags) on embedded fields are respected
+- All field annotations (`@GqlField`, struct tags) on embedded fields are respected
 - Field naming rules (case transformation, JSON tags) apply to embedded fields
 - Embedded structs themselves don't need GraphQL annotations
 - Only embedded structs found in the scanned packages are expanded
@@ -2243,8 +2296,8 @@ models:
 package models
 
 /**
- * @gqlType(name:"User",description:"A user in the system")
- * @gqlInput(name:"CreateUserInput")
+ * @GqlType(name:"User",description:"A user in the system")
+ * @GqlInput(name:"CreateUserInput")
  */
 type User struct {
     ID       string `gql:"id,type:ID,required,description:Unique user identifier"`
@@ -2298,7 +2351,7 @@ Finally, run gqlgen and implement the resolvers that use your domain models dire
 
 - Check if struct is public (starts with uppercase)
 - Verify package is in the scan path
-- Check for `@gqlIgnoreAll` without `include:` tags
+- Check for `@GqlIgnoreAll` without `include:` tags
 - Ensure `include-empty-types` is true if type has no fields
 
 ### Wrong Field Names
@@ -2310,12 +2363,12 @@ Finally, run gqlgen and implement the resolvers that use your domain models dire
 ### Missing @goModel Directive
 
 - Ensure `-use-gqlgen-directives=true` (default)
-- Or add `@gqlUseModelDirective` annotation to specific types
+- Or add `@GqlUseModelDirective` annotation to specific types
 
 ### Fields Not Showing Descriptions
 
 - Descriptions come from `description:` struct tag
-- Or from `@gqlType(description:` type-level annotation
+- Or from `@GqlType(description:` type-level annotation
 
 ## Contributing
 

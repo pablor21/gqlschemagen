@@ -322,9 +322,14 @@ func splitParams(s string) []string {
 // FieldOptions describes parsed options from gql struct tag
 type FieldOptions struct {
 	Name             string
-	Ignore           bool
-	Include          bool
-	Omit             bool
+	Ignore           bool     // Legacy: ignore everywhere
+	Include          bool     // Legacy: include everywhere
+	Omit             bool     // Legacy: omit everywhere (alias for Ignore)
+	IgnoreList       []string // List of types to ignore/omit this field in (supports *)
+	IncludeList      []string // List of types to include this field in (supports *)
+	ReadWrite        []string // rw: include in both types and inputs (supports *)
+	ReadOnly         []string // ro: include only in types, ignore in inputs (supports *)
+	WriteOnly        []string // wo: include only in inputs, ignore in types (supports *)
 	Optional         bool
 	Required         bool
 	Type             string // Custom GraphQL type
@@ -364,8 +369,8 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 		return res
 	}
 
-	// Parse gql tag using splitParams to handle quoted values with commas
-	parts := splitParams(g)
+	// Parse gql tag - handle key:value,value,value specially for lists
+	parts := splitParamsWithLists(g)
 
 	// First part is the name (unless empty/omitted)
 	if len(parts) > 0 {
@@ -384,7 +389,7 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 			continue
 		}
 
-		// Handle key:value pairs (type:, description:, deprecated:)
+		// Handle key:value pairs (type:, description:, deprecated:, include:, omit:, ignore:, rw:, ro:, wo:)
 		if strings.Contains(p, ":") {
 			kv := strings.SplitN(p, ":", 2)
 			key := strings.TrimSpace(kv[0])
@@ -400,18 +405,45 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 				// deprecated:"reason" - mark as deprecated with reason
 				res.Deprecated = true
 				res.DeprecatedReason = strings.Trim(value, "\"'")
+			case "include":
+				// include:TypeA,TypeB or include:* or include (backwards compat)
+				res.IncludeList = parseTypeList(value)
+			case "omit", "ignore":
+				// omit/ignore:TypeA,TypeB or omit/ignore:* (omit is alias for ignore)
+				res.IgnoreList = parseTypeList(value)
+			case "rw":
+				// rw:TypeA,TypeB or rw:* or rw (read-write, both types and inputs)
+				res.ReadWrite = parseTypeList(value)
+			case "ro":
+				// ro:TypeA,TypeB or ro:* or ro (read-only, types only)
+				res.ReadOnly = parseTypeList(value)
+			case "wo":
+				// wo:TypeA,TypeB or wo:* or wo (write-only, inputs only)
+				res.WriteOnly = parseTypeList(value)
 			}
 			continue
 		}
 
 		// Handle flags (no colon, just the flag name)
 		switch p {
-		case "ignore":
+		case "ignore", "omit":
+			// Legacy: ignore/omit everywhere (omit is alias for ignore)
 			res.Ignore = true
-		case "omit":
 			res.Omit = true
+			res.IgnoreList = []string{"*"}
 		case "include":
+			// Legacy: include everywhere
 			res.Include = true
+			res.IncludeList = []string{"*"}
+		case "rw":
+			// Read-write: include in both types and inputs (all)
+			res.ReadWrite = []string{"*"}
+		case "ro":
+			// Read-only: include only in types, not in inputs (all)
+			res.ReadOnly = []string{"*"}
+		case "wo":
+			// Write-only: include only in inputs, not in types (all)
+			res.WriteOnly = []string{"*"}
 		case "optional":
 			res.Optional = true
 		case "required":
@@ -426,6 +458,70 @@ func ParseFieldOptions(field *ast.Field, config *Config) FieldOptions {
 	}
 
 	return res
+}
+
+// splitParamsWithLists splits parameters by comma, but keeps key:val1,val2,val3 together
+// It respects quoted strings and handles list values after colons
+func splitParamsWithLists(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuotes := false
+	lastWasColon := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		if c == '"' {
+			inQuotes = !inQuotes
+			current.WriteByte(c)
+			lastWasColon = false
+		} else if c == ':' {
+			current.WriteByte(c)
+			lastWasColon = true
+		} else if c == ',' && !inQuotes {
+			// Check if this comma is part of a list (comes after a key:)
+			currentStr := current.String()
+
+			// If we just had a colon and current contains ":", this might be start of a list
+			// Keep collecting if the current part looks like "key:value" pattern
+			if lastWasColon || (strings.Contains(currentStr, ":") && isListKey(currentStr)) {
+				// This is a list value, keep the comma
+				current.WriteByte(c)
+				lastWasColon = true
+			} else {
+				// Regular parameter separator
+				parts = append(parts, current.String())
+				current.Reset()
+				lastWasColon = false
+			}
+		} else {
+			current.WriteByte(c)
+			if c != ' ' && c != '\t' {
+				lastWasColon = lastWasColon && c == ' ' // Keep lastWasColon if we're just in whitespace
+			}
+		}
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+
+	return parts
+}
+
+// isListKey checks if a key:value string has a key that expects a list
+func isListKey(s string) bool {
+	s = strings.TrimSpace(s)
+	if !strings.Contains(s, ":") {
+		return false
+	}
+	key := strings.SplitN(s, ":", 2)[0]
+	key = strings.TrimSpace(key)
+	switch key {
+	case "include", "omit", "ignore", "rw", "ro", "wo":
+		return true
+	}
+	return false
 }
 
 // ResolveFieldName resolves field name based on config and tags
@@ -505,10 +601,35 @@ func isAllUpper(s string) bool {
 // isKnownFlag checks if a string is a known gql tag flag
 func isKnownFlag(s string) bool {
 	switch s {
-	case "ignore", "omit", "include", "optional", "required", "forceResolver", "force_resolver", "deprecated":
+	case "ignore", "omit", "include", "optional", "required", "forceResolver", "force_resolver", "deprecated", "rw", "ro", "wo":
 		return true
 	}
 	return false
+}
+
+// parseTypeList parses a comma-separated list of type names
+// Returns ["*"] for empty values (backwards compatibility)
+func parseTypeList(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{"*"}
+	}
+	if value == "*" {
+		return []string{"*"}
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return []string{"*"}
+	}
+	return result
 }
 
 // StripPrefixSuffix removes specified prefixes and suffixes from a type name

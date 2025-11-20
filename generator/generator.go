@@ -848,7 +848,7 @@ func (g *Generator) generateTypeFromDef(typeSpec *ast.TypeSpec, st *ast.StructTy
 	buf.WriteString(" {\n")
 
 	// Generate fields from struct (use typeDef.IgnoreAll instead of d.TypeIgnoreAll)
-	fields := g.generateFieldsForType(st, d, typeDef.IgnoreAll, false)
+	fields := g.generateFieldsForTypeNamed(st, d, typeDef.IgnoreAll, false, name)
 
 	// Count applicable extra fields for this type
 	applicableExtraFields := 0
@@ -920,7 +920,7 @@ func (g *Generator) generateInputFromDef(typeSpec *ast.TypeSpec, st *ast.StructT
 	buf.WriteString(" {\n")
 
 	// Generate fields from struct (use inputDef.IgnoreAll instead of d.InputIgnoreAll)
-	fields := g.generateFieldsForType(st, d, inputDef.IgnoreAll, true)
+	fields := g.generateFieldsForTypeNamed(st, d, inputDef.IgnoreAll, true, inputName)
 
 	// Count applicable extra fields for this input
 	applicableExtraFields := 0
@@ -954,7 +954,12 @@ func (g *Generator) generateInputFromDef(typeSpec *ast.TypeSpec, st *ast.StructT
 }
 
 // generateFieldsForType generates fields with specific ignoreAll setting
-func (g *Generator) generateFieldsForType(st *ast.StructType, d StructDirectives, typeIgnoreAll bool, forInput bool) string {
+// func (g *Generator) generateFieldsForType(st *ast.StructType, d StructDirectives, typeIgnoreAll bool, forInput bool) string {
+// 	return g.generateFieldsForTypeNamed(st, d, typeIgnoreAll, forInput, "")
+// }
+
+// generateFieldsForTypeNamed generates fields with specific ignoreAll setting and type/input name for filtering
+func (g *Generator) generateFieldsForTypeNamed(st *ast.StructType, d StructDirectives, typeIgnoreAll bool, forInput bool, typeName string) string {
 	buf := strings.Builder{}
 
 	// Determine which ignoreAll flag to use
@@ -964,15 +969,15 @@ func (g *Generator) generateFieldsForType(st *ast.StructType, d StructDirectives
 		// Handle embedded fields
 		if f.Names == nil {
 			// This is an embedded field - expand its fields
-			embeddedFields := g.expandEmbeddedField(f, d, ignoreAll, forInput)
+			embeddedFields := g.expandEmbeddedFieldNamed(f, d, ignoreAll, forInput, typeName)
 			buf.WriteString(embeddedFields)
 			continue
 		}
 
 		opt := ParseFieldOptions(f, g.Config)
 
-		// Determine if field should be included
-		include := (!ignoreAll && !opt.Ignore && !opt.Omit) || opt.Include
+		// Determine if field should be included using new type-specific logic
+		include := shouldIncludeField(opt, ignoreAll, forInput, typeName)
 		if !include {
 			continue
 		}
@@ -1042,29 +1047,89 @@ func shouldApplyExtraField(ef ExtraField, targetName string) bool {
 	return false
 }
 
+// shouldIncludeField determines if a field should be included in a type/input
+// based on the FieldOptions and context (forInput, typeName)
+func shouldIncludeField(opt FieldOptions, ignoreAll bool, forInput bool, typeName string) bool {
+	// Handle read-only (ro): include only in types, ignore in inputs
+	if len(opt.ReadOnly) > 0 {
+		if forInput {
+			return false // Exclude from inputs
+		}
+		// Include in types only if typeName matches or is *
+		return matchesTypeList(opt.ReadOnly, typeName)
+	}
+
+	// Handle write-only (wo): include only in inputs, ignore in types
+	if len(opt.WriteOnly) > 0 {
+		if !forInput {
+			return false // Exclude from types
+		}
+		// Include in inputs only if typeName matches or is *
+		return matchesTypeList(opt.WriteOnly, typeName)
+	}
+
+	// Handle read-write (rw): include in both types and inputs
+	if len(opt.ReadWrite) > 0 {
+		return matchesTypeList(opt.ReadWrite, typeName)
+	}
+
+	// Handle ignore/omit list (omit is alias for ignore)
+	if len(opt.IgnoreList) > 0 && matchesTypeList(opt.IgnoreList, typeName) {
+		return false
+	}
+
+	// Handle include list
+	if len(opt.IncludeList) > 0 {
+		return matchesTypeList(opt.IncludeList, typeName)
+	}
+
+	// Legacy behavior: check old boolean flags
+	// Include if: (not ignored by ignoreAll AND not explicitly ignored/omitted) OR explicitly included
+	return (!ignoreAll && !opt.Ignore && !opt.Omit) || opt.Include
+}
+
+// matchesTypeList checks if a typeName matches any entry in the list
+// Returns true if list contains "*" or the exact typeName
+func matchesTypeList(list []string, typeName string) bool {
+	if len(list) == 0 {
+		return false
+	}
+	for _, name := range list {
+		if name == "*" || name == typeName {
+			return true
+		}
+	}
+	return false
+}
+
 // expandEmbeddedField recursively expands an embedded struct field into GraphQL fields
-func (g *Generator) expandEmbeddedField(f *ast.Field, d StructDirectives, ignoreAll bool, forInput bool) string {
+// func (g *Generator) expandEmbeddedField(f *ast.Field, d StructDirectives, ignoreAll bool, forInput bool) string {
+// 	return g.expandEmbeddedFieldNamed(f, d, ignoreAll, forInput, "")
+// }
+
+// expandEmbeddedFieldNamed recursively expands an embedded struct field into GraphQL fields with type name
+func (g *Generator) expandEmbeddedFieldNamed(f *ast.Field, d StructDirectives, ignoreAll bool, forInput bool, typeName string) string {
 	// Get the type name of the embedded field
-	var typeName string
+	var embeddedTypeName string
 	switch t := f.Type.(type) {
 	case *ast.Ident:
-		typeName = t.Name
+		embeddedTypeName = t.Name
 	case *ast.StarExpr:
 		// Handle pointer to embedded struct
 		if ident, ok := t.X.(*ast.Ident); ok {
-			typeName = ident.Name
+			embeddedTypeName = ident.Name
 		}
 	case *ast.SelectorExpr:
 		// Handle embedded struct from another package (e.g., pkg.Type)
-		typeName = t.Sel.Name
+		embeddedTypeName = t.Sel.Name
 	}
 
-	if typeName == "" {
+	if embeddedTypeName == "" {
 		return "" // Unable to determine type name
 	}
 
 	// Look up the embedded struct in the parser
-	embeddedStruct, exists := g.P.Structs[typeName]
+	embeddedStruct, exists := g.P.Structs[embeddedTypeName]
 	if !exists {
 		return "" // Embedded struct not found in parsed types
 	}
@@ -1075,7 +1140,7 @@ func (g *Generator) expandEmbeddedField(f *ast.Field, d StructDirectives, ignore
 		IgnoreAll: ignoreAll, // Inherit ignoreAll setting
 	}
 
-	return g.generateFieldsForType(embeddedStruct, embeddedDirectives, false, forInput)
+	return g.generateFieldsForTypeNamed(embeddedStruct, embeddedDirectives, false, forInput, typeName)
 }
 
 // generateEnum generates a GraphQL enum definition from an EnumType
