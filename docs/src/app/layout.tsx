@@ -1,0 +1,68 @@
+import "./globals.css";
+
+import { Exo_2, Raleway } from "next/font/google";
+
+import type { Metadata } from "next";
+import { Providers } from "./providers";
+
+const raleway = Raleway({
+  variable: "--font-raleway",
+  subsets: ["latin"],
+});
+
+const exo = Exo_2({
+  variable: "--font-exo",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s | GQLSchemaGen",
+    default: "GQLSchemaGen",
+  },
+  description:
+    "Documentation for GQLSchemaGen, the Go-based GraphQL schema generator. Learn how to install, configure, and extend the tool with practical examples.",
+  authors: [
+    {
+      name: "Pablo R.",
+      url: "https://github.com/pablor21",
+    },
+    {
+      name: "RaviAnand M.",
+      url: "https://github.com/dan6erbond",
+    },
+  ],
+  keywords: [
+    "GraphQL",
+    "Go",
+    "Schema Generation",
+    "GQLSchemaGen",
+    "gqlgen",
+    "GraphQL tooling",
+  ],
+  openGraph: {
+    title: "GQLSchemaGen Documentation",
+    description:
+      "The official documentation for GQLSchemaGen — generate GraphQL schemas directly from Go models.",
+    type: "website",
+    locale: "en_US",
+    siteName: "GQLSchemaGen",
+  },
+  metadataBase: new URL("https://pablor21.github.io/gqlschemagen"),
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="dark">
+      <body
+        className={`${raleway.variable} ${exo.variable} antialiased font-sans dark:bg-black`}
+      >
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}

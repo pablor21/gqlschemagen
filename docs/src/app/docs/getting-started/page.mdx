@@ -1,0 +1,87 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Getting Started",
+  description:
+    "Install GQLSchemaGen, configure your project, and generate your first GraphQL schema from Go types.",
+};
+
+# Getting Started
+
+GQLSchemaGen makes it easy to generate a GraphQL schema from your Go models. This guide walks you through installation, setup, and your first generated type.
+
+## Installation
+
+You can install GQLSchemaGen in your project using either of these methods:
+
+### Option 1: Install via `go install`
+
+<Snippet>
+  go install github.com/pablor21/gqlschemagen/cmd/gqlschemagen@latest
+</Snippet>
+
+This will install the tool as a binary in your `$GOPATH/bin` or `$GOBIN`.
+
+### Option 2: Add as a project dependency
+
+<Snippet>go get github.com/pablor21/gqlschemagen</Snippet>
+
+> **Note:** If you installed with `go get`, you can run the tool using `go tool gqlschemagen` instead of a global binary.
+
+---
+
+## Initialize your project
+
+We recommend starting by running:
+
+<Snippet>gqlschemagen init</Snippet>
+
+This will create a `gqlschemagen.yml` configuration file in your project root. This file is where you can specify which packages to scan, output paths, naming conventions, and other options. See [Configuration](/docs/configuration) for full details.
+
+---
+
+## Annotate your first type
+
+Add GraphQL annotations to your Go structs using comments above your type:
+
+<CodeBlock language="go" filename="models/user.go">
+  {`/**
+ * @GqlType(name:"UserProfile",description:"Represents a user in the system")
+ */
+type User struct {
+    ID   string
+    Name string
+}`}
+</CodeBlock>
+
+These annotations tell GQLSchemaGen how to map Go types to GraphQL object types.
+
+---
+
+## Generate your schema
+
+Once your structs are annotated, generate the GraphQL schema:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+This will produce a `schema.graphql` file with your types. For example, the `User` struct above generates:
+
+<CodeBlock language="graphql" filename="schemagraphqls">
+  {`"""
+Represents a user in the system
+"""
+type UserProfile @goModel(model: "your-package.User") {
+  id: ID!
+  name: String!
+}`}
+</CodeBlock>
+
+> **Tip:** Use `gqlschemagen generate --watch` during development to automatically regenerate the schema whenever you change your types.
+
+---
+
+## Next Steps
+
+Now that you have your first type generated, you can explore the `gqlschemagen.yml` configuration to customize package scanning, naming conventions, directives, and more. Check out [Configuration](/docs/configuration) for full details.
+
+<NextButton href="/docs/configuration">Configuration</NextButton>

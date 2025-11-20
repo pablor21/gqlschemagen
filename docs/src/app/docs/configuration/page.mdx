@@ -1,0 +1,139 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Configuration",
+  description:
+    "Learn how to configure GQLSchemaGen using a YAML file to control output paths, markers, namespaces, enums, and more.",
+};
+
+# Configuration
+
+Before you start generating schemas, you need to configure GQLSchemaGen to understand your project structure and how you want your GraphQL schema to be organized. Running:
+
+<Snippet>gqlschemagen init</Snippet>
+
+will create a `gqlschemagen.yml` file in your project root. This configuration file is the central place to define which Go packages should be scanned for annotated structs, how output files are structured, field naming conventions, and other important generation options. By setting these options up front, you can ensure your generated schema is consistent, easy to maintain, and tailored to your project’s needs.
+
+Here’s an example of a typical configuration:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`# gqlschemagen Configuration
+# Packages to scan for Go structs with gql annotations
+packages:
+   - ./
+
+# Output strategy: "single" for one file, "multiple" for separate files per type, "package" for one file per Go package
+
+strategy: single
+
+# Output configuration:
+
+# Option 1 (simple): Specify complete file path (backward compatible)
+
+output: graph/schema/generated.graphql
+
+# Option 2 (recommended): Separate directory and filename for better organization
+
+# output: graph/schema/ # Output directory
+
+# output_file_name: myschema.graphqls # Filename for single strategy (default: gqlschemagen.graphqls)
+
+# output_file_extension: .graphql # Extension for multiple/package strategies (default: .graphql)
+
+# Field name transformation: camel, snake, pascal, original, none
+
+field_case: camel
+
+# Use json struct tags for field names when gql tag is not present
+
+use_json_tag: true
+
+# Generate @goModel and @goField directives for gqlgen
+
+use_gqlgen_directives: false
+
+# Base path for @goModel directive (e.g., 'github.com/user/project/models')
+
+model_path: ""
+
+# Strip prefixes/suffixes from type names (comma-separated)
+
+strip_prefix: ""
+strip_suffix: ""
+
+# Add prefixes/suffixes to type/input names
+
+add_type_prefix: ""
+add_type_suffix: ""
+add_input_prefix: ""
+add_input_suffix: ""
+
+# Schema file name pattern for multiple mode (default: {model_name}.graphqls)
+
+schema_file_name: "{model_name}.graphqls"
+
+# Namespace separator for organizing schema files (default: "/")
+
+namespace_separator: "/"
+
+# Include types with no fields
+
+include_empty_types: false
+
+# Skip generating files that already exist
+
+skip_existing: false`}
+
+</CodeBlock>
+
+---
+
+## Parameter Reference
+
+| Parameter               | Description                                                                                            | Default                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `packages`              | List of Go packages to scan for annotated structs.                                                     | `["./"]`                         |
+| `strategy`              | Output strategy: `single` (one file), `multiple` (file per type), `package` (one file per Go package). | `single`                         |
+| `output`                | File path for single output strategy or directory for multiple/package strategies.                     | `graph/schema/generated.graphql` |
+| `output_file_name`      | Filename for single strategy when specifying output directory.                                         | `gqlschemagen.graphqls`          |
+| `output_file_extension` | File extension for multiple/package strategies.                                                        | `.graphql`                       |
+| `field_case`            | Transform field names: `camel`, `snake`, `pascal`, `original`, `none`.                                 | `camel`                          |
+| `use_json_tag`          | Use `json` struct tag for field names if `gql` tag is missing.                                         | `true`                           |
+| `use_gqlgen_directives` | Generate `@goModel` and `@goField` directives compatible with gqlgen.                                  | `false`                          |
+| `model_path`            | Base path for `@goModel` directives.                                                                   | `""`                             |
+| `strip_prefix`          | Remove prefixes from type names (comma-separated).                                                     | `""`                             |
+| `strip_suffix`          | Remove suffixes from type names (comma-separated).                                                     | `""`                             |
+| `add_type_prefix`       | Add a prefix to all type names.                                                                        | `""`                             |
+| `add_type_suffix`       | Add a suffix to all type names.                                                                        | `""`                             |
+| `add_input_prefix`      | Add a prefix to all input type names.                                                                  | `""`                             |
+| `add_input_suffix`      | Add a suffix to all input type names.                                                                  | `""`                             |
+| `schema_file_name`      | Filename pattern for multiple mode (`{model_name}` placeholder).                                       | `{model_name}.graphqls`          |
+| `namespace_separator`   | Separator for organizing schema files in directories.                                                  | `/`                              |
+| `include_empty_types`   | Include types that have no fields.                                                                     | `false`                          |
+| `skip_existing`         | Skip generating files if they already exist.                                                           | `false`                          |
+
+---
+
+After creating the `gqlschemagen.yml`, you can start generating schemas for your annotated structs:
+
+{" "}
+
+<Snippet>gqlschemagen generate</Snippet>
+
+<CodeBlock className="mt-4" language="graphql" filename="schemagraphqls">
+  {`"""
+Represents a user in the system
+"""
+type UserProfile @goModel(model: "your-package.User") {
+  id: ID!
+  name: String!
+}`}
+</CodeBlock>
+
+---
+
+With your configuration in place, you can start generating GraphQL types directly from your Go structs. GQLSchemaGen reads your annotated types and produces a fully-typed schema, including object types, input types, and enums, while respecting all naming and output strategies defined in your `gqlschemagen.yml`. This allows you to keep your schema synchronized with your code and reduces boilerplate in your GraphQL API.
+
+To learn how to annotate your structs and generate your first types, continue to the [GQL Types guide](/docs/features/gql-types).
+
+<NextButton href="/docs/features/gql-types">GQL Types</NextButton>

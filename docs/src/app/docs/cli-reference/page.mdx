@@ -1,0 +1,205 @@
+export const metadata = {
+  title: "CLI Reference",
+  description:
+    "Full command-line reference for the gqlschemagen CLI, including commands, flags, and usage examples.",
+};
+
+# GQLSchemaGen CLI Reference
+
+The GQLSchemaGen CLI lets you generate GraphQL schemas directly from your Go structs. This page covers all commands, flags, and options to help you get the most out of the tool.
+
+---
+
+## Quick Start
+
+### Initialize Configuration
+
+Create a default configuration file:
+
+<Snippet>gqlschemagen init</Snippet>
+
+You can also:
+
+<Snippet>
+  gqlschemagen init --output custom-config.yml gqlschemagen init -o
+  custom-config.yml gqlschemagen init --force # Overwrite existing file
+  gqlschemagen init -f
+</Snippet>
+
+---
+
+### Generate Schema
+
+You can run the generator in multiple ways:
+
+**Using `go run` (no installation needed):**
+
+<Snippet>
+  go run github.com/pablor21/gqlschemagen generate \ -p
+  ./internal/domain/entities \ -o ./graph/schema
+</Snippet>
+
+**Using the installed binary:**
+
+<Snippet>
+  gqlschemagen generate \ -p ./internal/domain/entities \ -o ./graph/schema
+</Snippet>
+
+**Using a configuration file:**
+
+<Snippet>
+# Create config first
+gqlschemagen init
+
+# Then generate (defaults to gqlschemagen.yml)
+
+gqlschemagen generate
+
+</Snippet>
+
+---
+
+### Get Help
+
+View available commands and usage:
+
+<Snippet>
+# Show all commands
+gqlschemagen help
+gqlschemagen --help
+gqlschemagen -h
+
+# Show help for a specific command
+
+gqlschemagen generate --help
+gqlschemagen init --help
+
+</Snippet>
+
+---
+
+## Using Command Line Flags
+
+All flags support **long (`--flag`)** and **short (`-f`)** formats.
+
+### Generate Command Flags
+
+<CodeBlock language="bash" filename="flags">
+{`gqlschemagen generate [flags]
+
+--config, -c string
+Path to config file (default: "gqlschemagen.yml")
+
+--pkg, -p string
+Root package directory to scan (required)
+
+--out, -o string
+Output directory or file path
+(default: "graph/schema/gqlschemagen.graphqls" for single strategy)
+
+--output-file-name, -ofn string
+Filename for single-strategy output (default: "gqlschemagen.graphqls")
+
+--output-file-extension string
+File extension for multiple/package strategies (default: ".graphqls")
+
+--strategy, -s string
+Generation strategy: "single", "multiple", or "package" (default: "single") - single: All types in one file - multiple: One file per type - package: One file per Go package
+
+--field-case, -case string
+Field name case: "camel", "snake", "pascal", "original", or "none" (default: "camel")
+
+--use-json-tag bool
+Use json tag for field names (default: true)
+
+--use-gqlgen-directives, -gqlgen bool
+Generate @goModel and @goField directives for gqlgen (default: false)
+
+--model-path, -m string
+Base path for @goModel directive (e.g., 'github.com/user/project/models')
+
+--strip-prefix string
+Comma-separated list of prefixes to strip from type names (e.g., 'DB,Pg')
+
+--strip-suffix string
+Comma-separated list of suffixes to strip from type names (e.g., 'DTO,Entity,Model')
+
+--add-type-prefix string
+Prefix to add to GraphQL type names (unless @GqlType specifies custom name)
+
+--add-type-suffix string
+Suffix to add to GraphQL type names (unless @GqlType specifies custom name)
+
+--add-input-prefix string
+Prefix to add to GraphQL input names (unless @GqlInput specifies custom name)
+
+--add-input-suffix string
+Suffix to add to GraphQL input names (unless @GqlInput specifies custom name)
+
+--schema-file-name string
+Schema file name pattern for multiple mode (default: "{model_name}.graphqls")
+
+--namespace-separator string
+Separator character for namespace paths when using @GqlNamespace (default: "/")
+
+--include-empty-types bool
+Include types with no fields in the schema (default: false)
+
+--skip-existing bool
+Skip generating files that already exist (default: false)`}
+
+</CodeBlock>
+
+---
+
+### Using Flags in Practice
+
+**Generate a single schema file:**
+
+<Snippet>
+  gqlschemagen generate \ -p ./internal/domain/entities \ -o
+  ./graph/schema/generated/schema.graphql
+</Snippet>
+
+**Generate multiple schema files (one per type):**
+
+<Snippet>
+  {`gqlschemagen generate \\
+  -p ./internal/domain/entities \\
+  -o ./graph/schema/generated \\
+  -s multiple \\
+  --schema-file-name "{model_name}.graphqls"`}
+</Snippet>
+
+**Organize schema files by Go package:**
+
+<Snippet>
+  gqlschemagen generate \ -p ./internal/domain \ -o ./graph/schema/generated \\
+  -s package
+</Snippet>
+
+---
+
+### YAML Configuration
+
+You can also use a YAML config instead of CLI flags.
+
+**Create default config:**
+
+<Snippet>gqlschemagen init</Snippet>
+
+**Generate using config file:**
+
+<Snippet>
+gqlschemagen generate
+gqlschemagen generate --config my-config.yml
+gqlschemagen generate -f my-config.yml
+
+# Or with go run
+
+go run github.com/pablor21/gqlschemagen generate
+go run github.com/pablor21/gqlschemagen generate --config my-config.yml
+
+</Snippet>
+
+> **Note:** CLI flags always override values from the configuration file when explicitly set.

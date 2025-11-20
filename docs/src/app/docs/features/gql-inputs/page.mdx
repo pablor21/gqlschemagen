@@ -1,0 +1,91 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "GraphQL Input Types",
+  description:
+    "Generate GraphQL input types from Go structs and learn how to control fields, naming, and behavior.",
+};
+
+# GQL Inputs
+
+<Alert
+  title="Opt-in Input Generation"
+  description="GraphQL input types are only generated for structs annotated with @GqlInput. You can annotate your main model or use a dedicated DTO to generate one or more input types."
+  color="warning"
+/>
+
+GQLSchemaGen allows you to generate GraphQL **input types** from your Go structs. Input types are useful for mutations or any operation that requires structured input data. You can use `@GqlInput` directly on your model struct, or create a dedicated DTO struct. Applying multiple `@GqlInput` annotations to a single struct allows generating multiple input types (for example, `CreateUserInput` and `UpdateUserInput`) from the same base struct.
+
+Additionally, you can add fields that do not exist in the struct using `@GqlInputExtraField`. This is especially useful for fields like passwords, confirmation codes, or computed values that should exist in the GraphQL input but are not stored directly in the model.
+
+For example:
+
+<CodeBlock language="go" filename="user.go">
+  {`/**
+ * @GqlInput(name:"CreateUserInput")
+ * @GqlInput(name:"UpdateUserInput")
+ * @GqlInputExtraField(name:"password",type:"String!",description:"User password",on:"CreateUserInput")
+ */
+type User struct {
+    ID       string
+    Username string
+    Email    string
+}`}
+</CodeBlock>
+
+This configuration produces:
+
+<CodeBlock language="graphql" filename="schemagraphqls">
+{`type User {
+  id: ID!
+  username: String!
+  email: String!
+  # Note: password NOT in type
+}
+
+input CreateUserInput {
+id: ID!
+username: String!
+email: String!
+"""User password"""
+password: String!
+}
+
+input UpdateUserInput {
+id: ID!
+username: String!
+email: String!
+
+# Note: password NOT in UpdateUserInput (on:"CreateUserInput" only)
+
+}`}
+
+</CodeBlock>
+
+---
+
+## Directive Parameters Reference
+
+| Directive             | Parameter     | Description                                                                                                                                                      |
+| --------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@GqlInput`           | `name`        | The name of the GraphQL input type to generate. This is required.                                                                                                |
+| `@GqlInputExtraField` | `name`        | Name of the extra field in the input type. Required.                                                                                                             |
+| `@GqlInputExtraField` | `type`        | GraphQL type of the field (e.g., `String!`, `ID`, `[String!]`). Required.                                                                                        |
+| `@GqlInputExtraField` | `description` | Optional documentation string for the field, which appears in the GraphQL schema.                                                                                |
+| `@GqlInputExtraField` | `on`          | Optional list of input type names to apply the field to. Defaults to `*` (applies to all inputs annotated on the struct). Multiple names can be comma-separated. |
+
+### Usage Notes
+
+- Fields added via `@GqlInputExtraField` are automatically treated as requiring resolvers or input processing. For example, when adding a password field for `CreateUserInput`, your mutation resolver or input handling logic must process this field accordingly.
+- The `on` parameter provides granular control over which inputs receive a particular field. You can target specific input types or use `*` to apply it universally.
+- You can combine multiple `@GqlInput` annotations with `@GqlInputExtraField` to generate fully customized input types from a single struct.
+
+---
+
+Once your input types are annotated, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+This will produce both your GraphQL object types and input types in your configured schema output location.
+
+<NextButton href="/docs/features/gql-enums">Next: Enums</NextButton>

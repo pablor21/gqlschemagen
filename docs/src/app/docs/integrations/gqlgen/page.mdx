@@ -1,0 +1,136 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Integration with GQLGen",
+  description:
+    "Learn how to integrate GQLSchemaGen with GQLGen, enabling smooth schema generation and Go resolver workflows.",
+};
+
+# Integration with GQLGen
+
+To use `gqlschemagen` with `gqlgen`, you should run the schema generator before running `gqlgen`. This ensures your GraphQL schemas are up-to-date before `gqlgen` generates resolvers and models.
+
+## Option 1: Using `go:generate` Directives
+
+Add this to a file in your project (e.g., `graph/generate.go`):
+
+<CodeBlock language="go" filename="graph/generate.go">
+{`package graph
+
+//go:generate go run github.com/pablor21/gqlschemagen generate
+//go:generate go run github.com/99designs/gqlgen generate`}
+
+</CodeBlock>
+
+Then run:
+
+<Snippet>go generate ./...</Snippet>
+
+This will:
+
+- First run `gqlschemagen` to generate GraphQL schemas from your Go structs
+- Then run `gqlgen` to generate resolvers and type-safe code
+
+## Option 2: Custom `generate.go` Script
+
+Create a `generate.go` file with a custom main function:
+
+<CodeBlock language="go" filename="generate.go">
+{`//go:build ignore
+// +build ignore
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+)
+
+func main() {
+// Step 1: Generate GraphQL schemas from Go structs
+fmt.Println("Generating GraphQL schemas from Go structs...")
+cmd := exec.Command("gqlschemagen", "generate")
+cmd.Stdout = os.Stdout
+cmd.Stderr = os.Stderr
+if err := cmd.Run(); err != nil {
+fmt.Fprintf(os.Stderr, "Failed to generate schemas: %v\n", err)
+os.Exit(1)
+}
+
+    // Step 2: Run gqlgen to generate resolvers
+    fmt.Println("\nGenerating gqlgen code...")
+    cmd = exec.Command("go", "run", "github.com/99designs/gqlgen", "generate")
+    cmd.Stdout = os.Stdout
+    cmd.Stderr = os.Stderr
+    if err := cmd.Run(); err != nil {
+    	fmt.Fprintf(os.Stderr, "Failed to generate gqlgen code: %v\n", err)
+    	os.Exit(1)
+    }
+
+    fmt.Println("\n✓ Code generation complete!")
+
+}`}
+
+</CodeBlock>
+
+Run it with:
+
+<Snippet>go run generate.go</Snippet>
+
+## Option 3: Makefile
+
+Create a `Makefile` with targets:
+
+<CodeBlock language="makefile" filename="Makefile">
+{`.PHONY: generate schema codegen
+
+generate: schema codegen
+
+schema:
+@echo "Generating GraphQL schemas..."
+@Gqlschemagen generate
+
+codegen:
+@echo "Generating gqlgen code..."
+@go run github.com/99designs/gqlgen generate`}
+
+</CodeBlock>
+
+Then run:
+
+<Snippet>make generate</Snippet>
+
+## Hybrid Approach: Auto-generated + Hand-written Schemas
+
+You can combine auto-generated schemas with hand-written ones:
+
+<CodeBlock language="yaml" filename="gqlgen.yml">
+  {`schema:
+  - graph/schema/generated.graphql  # Auto-generated from structs
+  - graph/schema/queries.graphql    # Hand-written queries
+  - graph/schema/mutations.graphql  # Hand-written mutations`}
+</CodeBlock>
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+  {`packages:
+  - ./internal/models
+output: graph/schema/generated.graphql  # Generate to separate file
+use_gqlgen_directives: true            # Add @goModel directives
+model_path: "github.com/youruser/yourproject/internal/models"`}
+</CodeBlock>
+
+This approach lets you:
+
+- Auto-generate types from domain models
+- Manually write queries, mutations, and subscriptions
+- Keep concerns separated and organized
+
+### Benefits
+
+- Schemas stay in sync with your Go models
+- No manual schema writing for domain types
+- Full type safety from structs to GraphQL
+- Single source of truth for your data models
+
+<NextButton href="/docs/cli-reference">CLI Reference</NextButton>
