@@ -38,9 +38,16 @@ type UserProfile @goModel(model: "your-package.User") {
 
 ---
 
-## Additional Fields with `@gqlTypeExtraField`
+## Additional Fields with `@gqlTypeExtraField` and `@gqlExtraField`
 
-You can also add fields that do not exist in your Go struct using the `@gqlTypeExtraField` directive:
+Sometimes you need fields in your GraphQL API that don’t exist in your Go structs. GQLSchemaGen supports this through two directives:
+
+* **`@gqlTypeExtraField`** — adds fields *only to the GraphQL type*
+* **`@gqlExtraField`** — adds fields to *both* the GraphQL type **and** its corresponding input
+
+### Adding Type-Only Fields with `@gqlTypeExtraField`
+
+Use this directive when the extra field should appear on the **GraphQL type only**, not on the input.
 
 <CodeBlock language="go" filename="user.go">
   {`/**
@@ -53,7 +60,7 @@ type User struct {
 }`}
 </CodeBlock>
 
-This generates a `posts` field on `UserProfile` without requiring it in your Go struct:
+This generates a `posts` field on the GraphQL type without requiring it in your Go struct:
 
 <CodeBlock language="graphql" filename="schema.graphql">
   {`"""Represents a user in the system"""
@@ -64,6 +71,44 @@ type UserProfile @goModel(model: "your-package.User") {
   posts: [Post!]!
 }`}
 </CodeBlock>
+
+### Adding Fields to Both Types and Inputs with `@gqlExtraField`
+
+If the extra field should exist on **both** the GraphQL type **and** the input type, use `@gqlExtraField` instead:
+
+<CodeBlock language="go" filename="user.go">
+  {`/**
+ * @GqlType(name:"User")
+ * @GqlInput(name:"UserInput")
+ * @GqlExtraField(name:"createdAt",type:"String!",description:"Creation timestamp")
+ */
+type User struct {
+    ID       string
+    Username string
+    Email    string
+}`}
+</CodeBlock>
+
+This produces the field on both structures:
+
+<CodeBlock language="graphql" filename="schema.graphql">
+  {`type User @goModel(model: "your-package.User") {
+  id: ID!
+  username: String!
+  email: String!
+  """Creation timestamp"""
+  createdAt: String! @goField(forceResolver: true)
+}
+
+input UserInput {
+id: ID!
+username: String!
+email: String!
+"""Creation timestamp"""
+createdAt: String!
+}`} </CodeBlock>
+
+Use `@gqlTypeExtraField` for type-only additions, and `@gqlExtraField` when inputs need to mirror those fields as well.
 
 ---
 
@@ -92,7 +137,7 @@ Use these directives to control which Go structs and fields are included in your
 
 ## Field-level Struct Tags
 
-Individual struct fields can be customized using the `gql:` struct tag. The first value in the tag is the GraphQL field name. If you omit it (leading comma), GQLSchemaGen uses the JSON tag or a transformed struct field name.
+Individual struct fields can be customized using the `gql:` struct tag. The first value in the tag defines the GraphQL field name. If you omit it (e.g., start with a comma), GQLSchemaGen falls back to the JSON tag or a transformed Go field name.
 
 | Option              | Description                                     | Example                                              |
 | ------------------- | ----------------------------------------------- | ---------------------------------------------------- |
@@ -108,7 +153,42 @@ Individual struct fields can be customized using the `gql:` struct tag. The firs
 | `required`          | Force non-null (adds `!`)                       | `gql:"email,required"`                               |
 | `forceResolver`     | Adds `@goField(forceResolver: true)` for gqlgen | `gql:"author,forceResolver"`                         |
 
-This gives you fine-grained control over how each field is represented in GraphQL without changing your Go type structure.
+### Read/Write Visibility Tags
+
+GQLSchemaGen also supports fine-grained visibility rules for controlling whether fields appear in **types**, **inputs**, or both. These rules work independently of field names and are especially useful for sensitive or internal-only properties.
+
+| Tag          | Behavior                        | Example              |
+| ------------ | ------------------------------- | -------------------- |
+| `ro[:types]` | Read-only: omitted from inputs  | `gql:"createdAt,ro"` |
+| `wo[:types]` | Write-only: omitted from types  | `gql:"password,wo"`  |
+| `rw[:types]` | Read-write: included everywhere | `gql:"name,rw"`      |
+
+You can restrict these tags to specific GraphQL types or inputs by providing a **comma-separated list** (no spaces):
+
+* `gql:"createdAt,ro:User,UserProfile"`
+* `gql:"password,wo:UserInput"`
+
+### Additional Rules and Behavior
+
+<Alert
+title="Important Notes on Visibility Tags"
+color="warning"
+description="Keep these rules in mind when working with ro/wo/rw:"
+/>
+
+* `omit` and `ignore` behave identically
+* When using lists, **no spaces** between names (`ro:User,Admin`, not `ro:User, Admin`)
+* The `:` is optional if you want the rule to apply to *all* generated types/inputs
+  * `ro` is identical to `ro:*`
+* Names in lists must match the names defined in `@GqlType` or `@GqlInput`
+* Visibility tags combine cleanly with all other modifiers
+  * Example:
+
+```go
+gql:"fieldName,type:ID,ro,description:\"Read-only ID\""
+```
+
+These struct tags give you precise control over how each field is represented across your GraphQL schema—without altering your Go data models.
 
 ---
 

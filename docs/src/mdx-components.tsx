@@ -30,14 +30,10 @@ export function useMDXComponents(): MDXComponents {
     CodeBlock: ({ className, ...props }) => (
       <CodeBlock className={cn("not-prose my-2", className)} {...props} />
     ),
-    /* pre: ({ children }) => (
-      <CodeBlock
-        filename=""
-        // extract language from className like "language-yaml"
-        language={children.props.className?.split(" ")[0].split("-")[1]}
-      >
-        {children.props.children}
-      </CodeBlock>
-    ), */
+    pre: ({ children }) => (
+      <pre className="bg-content1 text-zinc-100 p-4 rounded-lg border border-content2 overflow-x-auto text-sm leading-relaxed my-5">
+        <code className="block font-mono">{children}</code>
+      </pre>
+    ),
   };
 }
