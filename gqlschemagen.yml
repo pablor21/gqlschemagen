@@ -1,18 +1,49 @@
 # gqlschemagen Configuration
 # Configuration for generating GraphQL schemas from Go structs
+# For more information: https://github.com/pablor21/gqlschemagen
+
+
+# ====================================
+# Feature Support (via annotations):
+# ====================================
+# - Types: Use @gqlType annotation on structs
+# - Inputs: Use @gqlInput annotation on structs  
+# - Enums: Use @gqlEnum on type declarations with const values
+#   - Supports string and int (iota) enums
+#   - Custom enum names via @gqlEnum(name:"CustomName")
+#   - Enum value customization via @gqlEnumValue directive
+# - Field Options: Use gql struct tags
+#   - Custom names, types, descriptions
+#   - deprecated and deprecated:"reason" support
+#   - Quote values to include commas: description:"Hello, world"
+# - Extra Fields: @gqlTypeExtraField and @gqlInputExtraField
+# See README.md for complete documentation
+
+
 
 # Packages to scan for Go structs with gql annotations (required)
-# Supports glob patterns like ./models/**/*.go
+# Supports direct paths to directories containing Go files
 packages:
    - ./
 
-# Output strategy: "single" for one file, "multiple" for separate files per type
+# Output strategy: "single" for one file, "multiple" for separate files per type, "package" for separate files per package
 strategy: single
 
-# Output path (file for single strategy, directory for multiple)
-output: graph/schema/gqlschemagen.graphqls
+# Output path 
+output: graph/schema/
+
+# output file name when using single strategy
+output_file_name: gqlschemagen.graphqls
+
+# output file extension for multiple strategy
+output_file_extension: .graphqls
 
 # Field name transformation: camel, snake, pascal, original, none
+# - camel: FirstName -> firstName
+# - snake: FirstName -> first_name  
+# - pascal: FirstName -> FirstName
+# - original: Keep as defined in struct
+# - none: Keep struct field name untouched
 field_case: camel
 
 # Use json struct tags for field names when gql tag is not present
@@ -22,34 +53,53 @@ use_json_tag: true
 use_gqlgen_directives: false
 
 # Base path for @goModel directive (leave empty to use actual package path)
+# Example: "github.com/user/project/models"
 model_path: ""
 
 # Strip prefixes from type names (e.g., "DB,Pg" converts DBUser -> User)
+# Only applies when @gqlType or @gqlInput doesn't specify a custom name
 strip_prefix: ""
 
 # Strip suffixes from type names (e.g., "DTO,Entity" converts UserDTO -> User)
+# Only applies when @gqlType or @gqlInput doesn't specify a custom name
 strip_suffix: ""
 
 # Add prefix to GraphQL type names (e.g., "Gql" converts User -> GqlUser)
+# Only applies when @gqlType doesn't specify a custom name
 add_type_prefix: ""
 
 # Add suffix to GraphQL type names (e.g., "Type" converts User -> UserType)
+# Only applies when @gqlType doesn't specify a custom name
 add_type_suffix: ""
 
 # Add prefix to GraphQL input names
+# Only applies when @gqlInput doesn't specify a custom name
 add_input_prefix: ""
 
 # Add suffix to GraphQL input names (e.g., "Input" converts CreateUser -> CreateUserInput)
+# Only applies when @gqlInput doesn't specify a custom name
 add_input_suffix: ""
 
 # Schema file name pattern for multiple strategy (supports: {model_name}, {type_name})
+# Example: "{type_name}.graphqls" or "{model_name}_schema.graphqls"
 schema_file_name: "{model_name}.graphqls"
 
-# Include types with no fields
+# Include types with no fields in the generated schema
 include_empty_types: false
 
-# Skip overwriting existing files
+# Skip overwriting existing files when generating
 skip_existing: false
 
-# Automatically generate input types
+# Automatically generate input types from structs with @gqlType
 gen_inputs: true
+
+# GQLKeep preserved sections configuration
+# Allows you to preserve custom content between regenerations
+# Add content between @gqlKeepBegin and @gqlKeepEnd markers in your schema
+
+# Placement of the preserved sections (options: "start", "end")
+keep_section_placement: "end"
+
+# Markers to denote beginning and end of preserved sections
+keep_begin_marker: "# @gqlKeepBegin"
+keep_end_marker: "# @gqlKeepEnd"

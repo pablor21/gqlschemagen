@@ -58,10 +58,22 @@ func NewGenerator(p *Parser, config *Config) *Generator {
 }
 
 func (g *Generator) Run() error {
+	// Check if we have any namespaces defined
+	hasNamespaces := len(g.P.TypeNamespaces) > 0 || len(g.P.EnumNamespaces) > 0
+
 	// Ensure output directory exists
 	outputDir := g.Config.Output
-	if g.Config.GenStrategy == GenStrategySingle {
-		outputDir = filepath.Dir(g.Config.Output)
+	if g.Config.GenStrategy == GenStrategySingle && !hasNamespaces {
+		// For single strategy without namespaces, check if Output is a file path or directory
+		// If it ends with an extension, it's a file path - extract the directory
+		if strings.HasSuffix(g.Config.Output, ".graphql") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
+			outputDir = filepath.Dir(g.Config.Output)
+		} else {
+			outputDir = g.Config.Output
+		}
+	} else if g.Config.GenStrategy == GenStrategySingle && hasNamespaces {
+		// When using namespaces with single strategy, output path should be treated as directory
+		outputDir = g.Config.Output
 	}
 	if err := EnsureDir(outputDir); err != nil {
 		return err
@@ -70,18 +82,32 @@ func (g *Generator) Run() error {
 	// Build topological order
 	orders := g.buildDependencyOrder()
 
-	// Generate based on strategy
-	if g.Config.GenStrategy == GenStrategySingle {
-		return g.generateSingleFile(orders)
+	// If namespaces are defined AND we're using package strategy, merge both approaches
+	// If namespaces are defined with single/multiple strategy, use namespace generation
+	// Otherwise, use the configured strategy
+	if hasNamespaces && g.Config.GenStrategy == GenStrategyPackage {
+		return g.generateByNamespaceAndPackage(orders)
+	} else if hasNamespaces {
+		return g.generateByNamespace(orders)
 	}
-	return g.generateMultipleFiles(orders)
+
+	// Generate based on strategy
+	switch g.Config.GenStrategy {
+	case GenStrategySingle:
+		return g.generateSingleFile(orders)
+	case GenStrategyPackage:
+		return g.generatePackageFiles(orders)
+	default: // GenStrategyMultiple
+		return g.generateMultipleFiles(orders)
+	}
 }
 
 func (g *Generator) buildDependencyOrder() []string {
 	names := make([]string, 0, len(g.P.TypeNames))
-	for _, n := range g.P.TypeNames {
-		names = append(names, n)
-	}
+	// for _, n := range g.P.TypeNames {
+	// 	names = append(names, n)
+	// }
+	names = append(names, g.P.TypeNames...)
 	sort.Strings(names)
 
 	// Topological sort
@@ -111,10 +137,342 @@ func (g *Generator) buildDependencyOrder() []string {
 	return orders
 }
 
+// generateByNamespace generates schema files organized by namespace
+func (g *Generator) generateByNamespace(orders []string) error {
+	// Group types, inputs, and enums by namespace
+	type namespaceItems struct {
+		types  map[string][]TypeDefinition  // typeName -> type definitions
+		inputs map[string][]InputDefinition // typeName -> input definitions
+		enums  []string                     // enum names
+	}
+
+	namespaces := make(map[string]*namespaceItems)
+
+	// Helper to get or create namespace group
+	getNamespace := func(ns string) *namespaceItems {
+		if ns == "" {
+			ns = "_default"
+		}
+		if namespaces[ns] == nil {
+			namespaces[ns] = &namespaceItems{
+				types:  make(map[string][]TypeDefinition),
+				inputs: make(map[string][]InputDefinition),
+				enums:  []string{},
+			}
+		}
+		return namespaces[ns]
+	}
+
+	// Group types and inputs by namespace (file-level or directive-level)
+	for _, typeName := range orders {
+		typeSpec := g.P.StructTypes[typeName]
+		if typeSpec == nil || g.P.TypeToDecl[typeName] == nil {
+			continue
+		}
+
+		d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+		if d.SkipType {
+			continue
+		}
+
+		// Get file-level namespace for this type
+		fileNamespace := g.P.TypeNamespaces[typeName]
+
+		// Group types by their namespace (directive-level overrides file-level)
+		if d.HasTypeDirective {
+			for _, typeDef := range d.Types {
+				ns := typeDef.Namespace
+				if ns == "" {
+					ns = fileNamespace
+				}
+				nsItems := getNamespace(ns)
+				nsItems.types[typeName] = append(nsItems.types[typeName], typeDef)
+			}
+		}
+
+		// Group inputs by their namespace (directive-level overrides file-level)
+		if d.HasInputDirective {
+			for _, inputDef := range d.Inputs {
+				ns := inputDef.Namespace
+				if ns == "" {
+					ns = fileNamespace
+				}
+				nsItems := getNamespace(ns)
+				nsItems.inputs[typeName] = append(nsItems.inputs[typeName], inputDef)
+			}
+		}
+	}
+
+	// Group enums by namespace
+	for _, enumName := range g.P.EnumNames {
+		ns := g.P.EnumNamespaces[enumName]
+		nsItems := getNamespace(ns)
+		nsItems.enums = append(nsItems.enums, enumName)
+	}
+
+	// Collect all content in memory first (map of file path -> content)
+	fileContents := make(map[string]*strings.Builder)
+
+	// Generate content for each namespace
+	for namespace, items := range namespaces {
+		var outFile string
+
+		if namespace == "_default" {
+			// Types without namespace go to default location
+			outFile = filepath.Join(g.Config.Output, g.Config.OutputFileName)
+		} else {
+			// Convert namespace to file path using configured separator
+			// e.g., "user/auth" with separator "/" becomes "user/auth.graphql"
+			namespacePath := namespace
+			if g.Config.NamespaceSeparator != "/" {
+				namespacePath = strings.ReplaceAll(namespace, g.Config.NamespaceSeparator, string(filepath.Separator))
+			}
+			outFile = filepath.Join(g.Config.Output, namespacePath+g.Config.OutputFileExtension)
+		}
+
+		if g.Config.SkipExisting && FileExists(outFile) {
+			fmt.Println("skip", outFile)
+			continue
+		}
+
+		// Get or create buffer for this file
+		buf, exists := fileContents[outFile]
+		if !exists {
+			buf = &strings.Builder{}
+			fileContents[outFile] = buf
+		}
+
+		// Generate enums for this namespace
+		for _, enumName := range items.enums {
+			enumType := g.P.EnumTypes[enumName]
+			if enumType == nil {
+				continue
+			}
+			enumContent := g.generateEnum(enumType)
+			if enumContent != "" {
+				buf.WriteString(enumContent)
+				buf.WriteString("\n")
+			}
+		}
+
+		// Generate types for this namespace
+		for typeName, typeDefs := range items.types {
+			typeSpec := g.P.StructTypes[typeName]
+			structType := g.P.Structs[typeName]
+			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+
+			for _, typeDef := range typeDefs {
+				typeContent := g.generateTypeFromDef(typeSpec, structType, d, typeDef)
+				if typeContent != "" {
+					buf.WriteString(typeContent)
+				}
+			}
+		}
+
+		// Generate inputs for this namespace
+		for typeName, inputDefs := range items.inputs {
+			typeSpec := g.P.StructTypes[typeName]
+			structType := g.P.Structs[typeName]
+			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+
+			for _, inputDef := range inputDefs {
+				inputContent := g.generateInputFromDef(typeSpec, structType, d, inputDef)
+				if inputContent != "" {
+					buf.WriteString(inputContent)
+				}
+			}
+		}
+	}
+
+	// Write all files at once
+	for outFile, buf := range fileContents {
+		if buf.Len() > 0 {
+			// Ensure directory exists
+			if err := EnsureDir(filepath.Dir(outFile)); err != nil {
+				return err
+			}
+			if err := WriteFile(outFile, buf.String(), g.Config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// generateByNamespaceAndPackage combines namespace and package strategies
+// Types with namespaces use namespace, types without use package directory
+func (g *Generator) generateByNamespaceAndPackage(orders []string) error {
+	// Collect all content in memory first (map of file path -> content)
+	fileContents := make(map[string]*strings.Builder)
+
+	// Helper to get or create buffer for a file
+	getBuffer := func(filePath string) *strings.Builder {
+		buf, exists := fileContents[filePath]
+		if !exists {
+			buf = &strings.Builder{}
+			fileContents[filePath] = buf
+		}
+		return buf
+	}
+
+	// Process enums
+	for _, enumName := range g.P.EnumNames {
+		enumType := g.P.EnumTypes[enumName]
+		if enumType == nil {
+			continue
+		}
+
+		var outFile string
+		ns := g.P.EnumNamespaces[enumName]
+
+		if ns != "" {
+			// Use namespace
+			namespacePath := ns
+			if g.Config.NamespaceSeparator != "/" {
+				namespacePath = strings.ReplaceAll(ns, g.Config.NamespaceSeparator, string(filepath.Separator))
+			}
+			outFile = filepath.Join(g.Config.Output, namespacePath+g.Config.OutputFileExtension)
+		} else {
+			// Use package directory
+			filePath := g.P.PackagePaths[enumName]
+			pkgDir := filepath.Dir(filePath)
+			pkgName := filepath.Base(pkgDir)
+			outFile = filepath.Join(g.Config.Output, pkgName+g.Config.OutputFileExtension)
+		}
+
+		if g.Config.SkipExisting && FileExists(outFile) {
+			continue
+		}
+
+		buf := getBuffer(outFile)
+		enumContent := g.generateEnum(enumType)
+		if enumContent != "" {
+			buf.WriteString(enumContent)
+			buf.WriteString("\n")
+		}
+	}
+
+	// Process types and inputs
+	for _, typeName := range orders {
+		typeSpec := g.P.StructTypes[typeName]
+		if typeSpec == nil {
+			continue
+		}
+
+		d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+		if d.SkipType {
+			continue
+		}
+
+		// Skip if no directives present
+		if !d.HasTypeDirective && !d.HasInputDirective {
+			continue
+		}
+
+		// Get file-level namespace for this type
+		fileNamespace := g.P.TypeNamespaces[typeName]
+
+		// Process types
+		if d.HasTypeDirective {
+			for _, typeDef := range d.Types {
+				var outFile string
+				ns := typeDef.Namespace
+				if ns == "" {
+					ns = fileNamespace
+				}
+
+				if ns != "" {
+					// Use namespace
+					namespacePath := ns
+					if g.Config.NamespaceSeparator != "/" {
+						namespacePath = strings.ReplaceAll(ns, g.Config.NamespaceSeparator, string(filepath.Separator))
+					}
+					outFile = filepath.Join(g.Config.Output, namespacePath+g.Config.OutputFileExtension)
+				} else {
+					// Use package directory
+					filePath := g.P.PackagePaths[typeName]
+					pkgDir := filepath.Dir(filePath)
+					pkgName := filepath.Base(pkgDir)
+					outFile = filepath.Join(g.Config.Output, pkgName+g.Config.OutputFileExtension)
+				}
+
+				if g.Config.SkipExisting && FileExists(outFile) {
+					continue
+				}
+
+				buf := getBuffer(outFile)
+				typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, typeDef)
+				if typeContent != "" {
+					buf.WriteString(typeContent)
+				}
+			}
+		}
+
+		// Process inputs
+		if d.HasInputDirective {
+			for _, inputDef := range d.Inputs {
+				var outFile string
+				ns := inputDef.Namespace
+				if ns == "" {
+					ns = fileNamespace
+				}
+
+				if ns != "" {
+					// Use namespace
+					namespacePath := ns
+					if g.Config.NamespaceSeparator != "/" {
+						namespacePath = strings.ReplaceAll(ns, g.Config.NamespaceSeparator, string(filepath.Separator))
+					}
+					outFile = filepath.Join(g.Config.Output, namespacePath+g.Config.OutputFileExtension)
+				} else {
+					// Use package directory
+					filePath := g.P.PackagePaths[typeName]
+					pkgDir := filepath.Dir(filePath)
+					pkgName := filepath.Base(pkgDir)
+					outFile = filepath.Join(g.Config.Output, pkgName+g.Config.OutputFileExtension)
+				}
+
+				if g.Config.SkipExisting && FileExists(outFile) {
+					continue
+				}
+
+				buf := getBuffer(outFile)
+				inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, inputDef)
+				if inputContent != "" {
+					buf.WriteString(inputContent)
+				}
+			}
+		}
+	}
+
+	// Write all files at once
+	for outFile, buf := range fileContents {
+		if buf.Len() > 0 {
+			// Ensure directory exists
+			if err := EnsureDir(filepath.Dir(outFile)); err != nil {
+				return err
+			}
+			if err := WriteFile(outFile, buf.String(), g.Config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (g *Generator) generateSingleFile(orders []string) error {
-	outFile := g.Config.Output
-	if outFile == "" {
-		outFile = "schema.graphql"
+	// Determine output file path
+	// If Output ends with an extension (old style), use it directly
+	// If Output is a directory (new style), join with OutputFileName
+	var outFile string
+	if strings.HasSuffix(g.Config.Output, ".graphql") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
+		// Old style: Output is the full file path
+		outFile = g.Config.Output
+	} else {
+		// New style: Output is directory, use OutputFileName
+		outFile = filepath.Join(g.Config.Output, g.Config.OutputFileName)
 	}
 
 	if g.Config.SkipExisting && FileExists(outFile) {
@@ -124,7 +482,20 @@ func (g *Generator) generateSingleFile(orders []string) error {
 
 	buf := strings.Builder{}
 	// Add code generation notice
-	buf.WriteString("# Code generated by https://github.com/pablor21/gqlschemagen, DO NOT EDIT.\n\n")
+	//buf.WriteString("# Code generated by https://github.com/pablor21/gqlschemagen, DO NOT EDIT.\n\n")
+
+	// Generate enums first
+	for _, enumName := range g.P.EnumNames {
+		enumType := g.P.EnumTypes[enumName]
+		if enumType == nil {
+			continue
+		}
+		enumContent := g.generateEnum(enumType)
+		if enumContent != "" {
+			buf.WriteString(enumContent)
+			buf.WriteString("\n")
+		}
+	}
 
 	for _, typeName := range orders {
 		typeSpec := g.P.StructTypes[typeName]
@@ -158,10 +529,206 @@ func (g *Generator) generateSingleFile(orders []string) error {
 		}
 	}
 
-	return WriteFile(outFile, buf.String())
+	return WriteFile(outFile, buf.String(), g.Config)
+}
+
+func (g *Generator) generatePackageFiles(orders []string) error {
+	// Group types, inputs, and enums by their Go package path
+	type packageItems struct {
+		types  map[string][]TypeDefinition  // typeName -> type definitions
+		inputs map[string][]InputDefinition // typeName -> input definitions
+		enums  []string                     // enum names
+	}
+
+	packages := make(map[string]*packageItems)
+
+	// Helper to get or create package group
+	getPackage := func(pkgPath string) *packageItems {
+		if pkgPath == "" {
+			pkgPath = "_default"
+		}
+		if packages[pkgPath] == nil {
+			packages[pkgPath] = &packageItems{
+				types:  make(map[string][]TypeDefinition),
+				inputs: make(map[string][]InputDefinition),
+				enums:  []string{},
+			}
+		}
+		return packages[pkgPath]
+	}
+
+	// Group enums by package
+	for _, enumName := range g.P.EnumNames {
+		enumType := g.P.EnumTypes[enumName]
+		if enumType == nil {
+			continue
+		}
+		// Get package directory from file path in PackagePaths
+		filePath := g.P.PackagePaths[enumName]
+		pkgDir := filepath.Dir(filePath)
+		pkg := getPackage(pkgDir)
+		pkg.enums = append(pkg.enums, enumName)
+	}
+
+	// Group types and inputs by package
+	for _, typeName := range orders {
+		typeSpec := g.P.StructTypes[typeName]
+		if typeSpec == nil {
+			continue
+		}
+
+		d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+		if d.SkipType {
+			continue
+		}
+
+		// Get package directory from file path in PackagePaths
+		filePath := g.P.PackagePaths[typeName]
+		pkgDir := filepath.Dir(filePath)
+		pkg := getPackage(pkgDir)
+
+		// Add types
+		if d.HasTypeDirective {
+			pkg.types[typeName] = append(pkg.types[typeName], d.Types...)
+		}
+
+		// Add inputs
+		if d.HasInputDirective {
+			pkg.inputs[typeName] = append(pkg.inputs[typeName], d.Inputs...)
+		}
+	}
+
+	// Sort package paths for deterministic output
+	pkgPaths := make([]string, 0, len(packages))
+	for pkgPath := range packages {
+		pkgPaths = append(pkgPaths, pkgPath)
+	}
+	sort.Strings(pkgPaths)
+
+	// Collect all content in memory first (map of file path -> content)
+	fileContents := make(map[string]*strings.Builder)
+
+	// Generate content for each package
+	for _, pkgPath := range pkgPaths {
+		items := packages[pkgPath]
+
+		// Determine output file name from package path
+		var outFile string
+		if pkgPath == "_default" {
+			// Types without package go to default location
+			outFile = filepath.Join(g.Config.Output, g.Config.OutputFileName)
+		} else {
+			// Use the last segment of the package path as the file name
+			// e.g., "/path/to/models" -> "models.graphqls"
+			pkgName := filepath.Base(pkgPath)
+			// Remove .go extension if present
+			pkgName = strings.TrimSuffix(pkgName, ".go")
+			outFile = filepath.Join(g.Config.Output, pkgName+g.Config.OutputFileExtension)
+		}
+
+		if g.Config.SkipExisting && FileExists(outFile) {
+			fmt.Println("skip", outFile)
+			continue
+		}
+
+		// Get or create buffer for this file
+		buf, exists := fileContents[outFile]
+		if !exists {
+			buf = &strings.Builder{}
+			fileContents[outFile] = buf
+		}
+
+		// Generate enums for this package
+		for _, enumName := range items.enums {
+			enumType := g.P.EnumTypes[enumName]
+			if enumType == nil {
+				continue
+			}
+			enumContent := g.generateEnum(enumType)
+			if enumContent != "" {
+				buf.WriteString(enumContent)
+				buf.WriteString("\n")
+			}
+		}
+
+		// Generate types for this package
+		for typeName, typeDefs := range items.types {
+			typeSpec := g.P.StructTypes[typeName]
+			structType := g.P.Structs[typeName]
+			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+
+			for _, typeDef := range typeDefs {
+				typeContent := g.generateTypeFromDef(typeSpec, structType, d, typeDef)
+				if typeContent != "" {
+					buf.WriteString(typeContent)
+				}
+			}
+		}
+
+		// Generate inputs for this package
+		for typeName, inputDefs := range items.inputs {
+			typeSpec := g.P.StructTypes[typeName]
+			structType := g.P.Structs[typeName]
+			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
+
+			for _, inputDef := range inputDefs {
+				inputContent := g.generateInputFromDef(typeSpec, structType, d, inputDef)
+				if inputContent != "" {
+					buf.WriteString(inputContent)
+				}
+			}
+		}
+	}
+
+	// Write all files at once
+	for outFile, buf := range fileContents {
+		if buf.Len() > 0 {
+			// Ensure directory exists
+			if err := EnsureDir(filepath.Dir(outFile)); err != nil {
+				return err
+			}
+			if err := WriteFile(outFile, buf.String(), g.Config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (g *Generator) generateMultipleFiles(orders []string) error {
+	// Collect all content in memory first (map of file path -> content)
+	fileContents := make(map[string]*strings.Builder)
+
+	// Generate enums first
+	for _, enumName := range g.P.EnumNames {
+		enumType := g.P.EnumTypes[enumName]
+		if enumType == nil {
+			continue
+		}
+
+		fileName := strings.ToLower(enumName) + g.Config.OutputFileExtension
+		outFile := filepath.Join(g.Config.Output, fileName)
+
+		if g.Config.SkipExisting && FileExists(outFile) {
+			fmt.Println("skip", outFile)
+			continue
+		}
+
+		// Get or create buffer for this file
+		buf, exists := fileContents[outFile]
+		if !exists {
+			buf = &strings.Builder{}
+			fileContents[outFile] = buf
+		}
+
+		enumContent := g.generateEnum(enumType)
+		if enumContent != "" {
+			buf.WriteString(enumContent)
+		}
+	}
+
+	// Generate types and inputs
 	for _, typeName := range orders {
 		typeSpec := g.P.StructTypes[typeName]
 		if typeSpec == nil {
@@ -187,13 +754,12 @@ func (g *Generator) generateMultipleFiles(orders []string) error {
 			continue
 		}
 
-		if err := EnsureDir(filepath.Dir(outFile)); err != nil {
-			return err
+		// Get or create buffer for this file
+		buf, exists := fileContents[outFile]
+		if !exists {
+			buf = &strings.Builder{}
+			fileContents[outFile] = buf
 		}
-
-		buf := strings.Builder{}
-		// Add code generation notice
-		buf.WriteString("# Code generated by https://github.com/pablor21/gqlschemagen, DO NOT EDIT.\n\n")
 
 		// Generate all types from @gqlType directives
 		if d.HasTypeDirective {
@@ -214,13 +780,21 @@ func (g *Generator) generateMultipleFiles(orders []string) error {
 				}
 			}
 		}
+	}
 
+	// Write all files at once
+	for outFile, buf := range fileContents {
 		if buf.Len() > 0 {
-			if err := WriteFile(outFile, buf.String()); err != nil {
+			// Ensure directory exists
+			if err := EnsureDir(filepath.Dir(outFile)); err != nil {
+				return err
+			}
+			if err := WriteFile(outFile, buf.String(), g.Config); err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -434,6 +1008,17 @@ func (g *Generator) generateFieldsForType(st *ast.StructType, d StructDirectives
 			buf.WriteString(" @goField(forceResolver: true)")
 		}
 
+		// Add @deprecated directive if field is deprecated
+		if opt.Deprecated {
+			if opt.DeprecatedReason != "" {
+				// Escape quotes in the reason
+				escapedReason := strings.ReplaceAll(opt.DeprecatedReason, `"`, `\"`)
+				buf.WriteString(fmt.Sprintf(` @deprecated(reason: "%s")`, escapedReason))
+			} else {
+				buf.WriteString(" @deprecated")
+			}
+		}
+
 		buf.WriteString("\n")
 	}
 
@@ -491,4 +1076,60 @@ func (g *Generator) expandEmbeddedField(f *ast.Field, d StructDirectives, ignore
 	}
 
 	return g.generateFieldsForType(embeddedStruct, embeddedDirectives, false, forInput)
+}
+
+// generateEnum generates a GraphQL enum definition from an EnumType
+func (g *Generator) generateEnum(enumType *EnumType) string {
+	buf := strings.Builder{}
+
+	// Add description if present
+	if enumType.Description != "" {
+		buf.WriteString(fmt.Sprintf("\"\"\"\n%s\n\"\"\"\n", enumType.Description))
+	}
+
+	buf.WriteString(fmt.Sprintf("enum %s", enumType.Name))
+
+	// Add @goModel directive if gqlgen directives are enabled
+	if g.Config.UseGqlGenDirectives {
+		pkgPath := g.P.GetPackageImportPath(enumType.GoTypeName, g.Config.ModelPath)
+		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgPath, enumType.GoTypeName))
+	}
+
+	buf.WriteString(" {\n")
+
+	// Generate enum values
+	for _, value := range enumType.Values {
+		// Add description if present
+		if value.Description != "" {
+			buf.WriteString(fmt.Sprintf("  \"\"\"\n  %s\n  \"\"\"\n", value.Description))
+		}
+
+		// Add the enum value
+		buf.WriteString(fmt.Sprintf("  %s", value.GraphQLName))
+
+		// Add @goEnum directive if gqlgen directives are enabled
+		if g.Config.UseGqlGenDirectives {
+			// Use the package path where the const value is defined, not where the type is defined
+			var valuePkgPath string
+			if value.PackagePath != "" {
+				// Use the stored package info for this specific const value
+				valuePkgPath = g.P.GetPackageImportPathFromFile(value.PackagePath, value.PackageName, g.Config.ModelPath)
+			} else {
+				// Fallback to using the enum type's package (for backwards compatibility)
+				valuePkgPath = g.P.GetPackageImportPath(enumType.GoTypeName, g.Config.ModelPath)
+			}
+			buf.WriteString(fmt.Sprintf(" @goEnum(value: \"%s.%s\")", valuePkgPath, value.GoName))
+		}
+
+		// Add deprecated directive if present
+		if value.Deprecated != "" {
+			buf.WriteString(fmt.Sprintf(" @deprecated(reason: \"%s\")", value.Deprecated))
+		}
+
+		buf.WriteString("\n")
+	}
+
+	buf.WriteString("}\n")
+
+	return buf.String()
 }

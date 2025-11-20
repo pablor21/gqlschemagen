@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/pablor21/gqlschemagen/generator"
@@ -97,7 +96,10 @@ func initCommand(args []string) {
 	force := fs.Bool("force", false, "overwrite existing file")
 	fs.BoolVar(force, "f", false, "short for --force")
 
-	fs.Parse(processedArgs)
+	err := fs.Parse(processedArgs)
+	if err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	// Check if file already exists
 	if _, err := os.Stat(*output); err == nil && !*force {
@@ -129,6 +131,8 @@ func generateCommand(args []string) {
 		fmt.Fprintf(os.Stderr, "Optional flags:\n")
 		fmt.Fprintf(os.Stderr, "  --config, -f <file>           Path to config file (default: gqlschemagen.yml)\n")
 		fmt.Fprintf(os.Stderr, "  --out, -o <path>              Output directory or file path (default: graph/schema)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-name <name>     Output file name for single strategy (default: gqlschemagen.graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-extension <ext> Output file extension for multiple/package strategies (default: .graphqls)\n")
 		fmt.Fprintf(os.Stderr, "  --strategy, -s <strategy>     Generation strategy: single or multiple (default: single)\n")
 		fmt.Fprintf(os.Stderr, "  --skip-existing               Skip generating files that already exist\n")
 		fmt.Fprintf(os.Stderr, "  --field-case, -c <case>       Field name case: camel, snake, pascal, original, none (default: camel)\n")
@@ -158,6 +162,10 @@ func generateCommand(args []string) {
 
 	out := fs.String("out", "", "output directory or file path")
 	fs.StringVar(out, "o", "", "short for --out")
+
+	outputFileName := fs.String("output-file-name", "", "output file name for single strategy")
+
+	outputFileExtension := fs.String("output-file-extension", "", "output file extension for multiple/package strategies")
 
 	strategy := fs.String("strategy", "single", "generation strategy: single or multiple")
 	fs.StringVar(strategy, "s", "single", "short for --strategy")
@@ -191,7 +199,10 @@ func generateCommand(args []string) {
 
 	includeEmptyTypes := fs.Bool("include-empty-types", false, "include types with no fields in the schema")
 
-	fs.Parse(processedArgs)
+	err := fs.Parse(processedArgs)
+	if err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	// Initialize config
 	cfg := generator.NewConfig()
@@ -220,6 +231,10 @@ func generateCommand(args []string) {
 			cfg.Packages = []string{*pkg}
 		case "out", "o":
 			cfg.Output = *out
+		case "output-file-name":
+			cfg.OutputFileName = *outputFileName
+		case "output-file-extension":
+			cfg.OutputFileExtension = *outputFileExtension
 		case "strategy", "s":
 			cfg.GenStrategy = generator.GenStrategy(*strategy)
 		case "skip-existing":
@@ -252,66 +267,9 @@ func generateCommand(args []string) {
 	})
 
 	// Generate schema
-	if err := Generate(cfg); err != nil {
+	if err := generator.Generate(cfg); err != nil {
 		log.Fatalf("generation failed: %v", err)
 	}
 
 	fmt.Println("done")
-}
-
-func GenerateFromDefaultConfig() error {
-	return GenerateFromConfigFile("gqlschemagen.yml")
-}
-
-func GenerateFromConfigFile(configPath string) error {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read config file %s: %w", configPath, err)
-	}
-
-	var cfg generator.Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return fmt.Errorf("failed to parse config file %s: %w", configPath, err)
-	}
-
-	return Generate(&cfg)
-}
-
-// Generate runs the schema generation with the provided configuration
-func Generate(cfg *generator.Config) error {
-	// Normalize configuration
-	cfg.Normalize()
-
-	// Set default output based on strategy if not specified
-	if cfg.Output == "" {
-		if cfg.GenStrategy == generator.GenStrategySingle {
-			cfg.Output = "graph/schema/gqlschemagen.graphqls"
-		} else {
-			cfg.Output = "graph/schema"
-		}
-	}
-
-	// Clean output path
-	cfg.Output = filepath.Clean(cfg.Output)
-
-	// Validate configuration
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("config validation error: %w", err)
-	}
-
-	// Parse all packages
-	parser := generator.NewParser()
-	for _, pkgPath := range cfg.Packages {
-		if err := parser.Walk(generator.PkgDir(pkgPath)); err != nil {
-			return fmt.Errorf("parse error for package %s: %w", pkgPath, err)
-		}
-	}
-
-	// Generate schema
-	engine := generator.NewGenerator(parser, cfg)
-	if err := engine.Run(); err != nil {
-		return fmt.Errorf("generation error: %w", err)
-	}
-
-	return nil
 }
