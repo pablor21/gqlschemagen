@@ -118,7 +118,7 @@ func NewConfig() *Config {
 		GenStrategy:         GenStrategyMultiple,
 		SchemaFileName:      "{model_name}.graphqls",
 		OutputFileName:      "gqlschemagen.graphqls",
-		OutputFileExtension: ".graphql",
+		OutputFileExtension: ".graphqls",
 		IncludeEmptyTypes:   false,
 		NamespaceSeparator:  "/",
 	}
@@ -141,7 +141,7 @@ func (c *Config) Normalize() {
 		c.OutputFileName = "gqlschemagen.graphqls"
 	}
 	if c.OutputFileExtension == "" {
-		c.OutputFileExtension = ".graphql"
+		c.OutputFileExtension = ".graphqls"
 	}
 
 	if c.KeepBeginMarker == "" {
