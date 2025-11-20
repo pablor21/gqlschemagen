@@ -128,6 +128,12 @@ Use these directives to control which Go structs and fields are included in your
 | `@GqlTypeExtraField` | `tags`        | Optional Go struct tags to attach to the field.                                                                                      | `"json:\"user_posts\""`                     |
 | `@GqlTypeExtraField` | `on`          | Optional list of type names this field should apply to. Defaults to `*` (all types). Supports comma-separated lists or array syntax. | `on:"Type1,Type2"` / `on:["Type1","Type2"]` |
 
+<Alert
+  title="Important"
+  description="Only structs annotated with @GqlType are included in schema generation. Extra fields can be added to these types using @GqlTypeExtraField."
+  color="warning"
+/>
+
 ---
 
 ### Accepted formats for `on`
@@ -142,12 +148,6 @@ Use these directives to control which Go structs and fields are included in your
   `on:[]` or `on:""`
 - **Apply to all types (wildcard)**
   `on:"*"` or `on:["*"]`
-
-<Alert
-  title="Important"
-  description="Only structs annotated with @GqlType are included in schema generation. Extra fields can be added to these types using @GqlTypeExtraField."
-  color="warning"
-/>
 
 ---
 
