@@ -46,7 +46,7 @@ Add GraphQL annotations to your Go structs using comments above your type:
 
 <CodeBlock language="go" filename="models/user.go">
   {`/**
- * @gqlType(name:"UserProfile",description:"Represents a user in the system")
+ * @GqlType(name:"UserProfile",description:"Represents a user in the system")
  */
 type User struct {
     ID   string
@@ -67,7 +67,7 @@ Once your structs are annotated, generate the GraphQL schema:
 This will produce a `schema.graphql` file with your types. For example, the `User` struct above generates:
 
 <CodeBlock language="graphql" filename="schema.graphql">
-{`"""
+  {`"""
 Represents a user in the system
 """
 type UserProfile @goModel(model: "your-package.User") {

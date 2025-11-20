@@ -10,11 +10,11 @@ export const metadata = {
 
 <Alert
   title="Opt-in Enum Generation"
-  description="Only Go types annotated with @gqlEnum will generate GraphQL enum types. Each enum must have at least one constant defined."
+  description="Only Go types annotated with @GqlEnum will generate GraphQL enum types. Each enum must have at least one constant defined."
   color="warning"
 />
 
-GQLSchemaGen can generate **GraphQL enum types** from Go types and their constants. Enums can be string-based or integer-based (using `iota`). You annotate your Go type with `@gqlEnum`, and optionally provide a custom name and description.
+GQLSchemaGen can generate **GraphQL enum types** from Go types and their constants. Enums can be string-based or integer-based (using `iota`). You annotate your Go type with `@GqlEnum`, and optionally provide a custom name and description.
 
 ---
 
@@ -24,14 +24,14 @@ Example:
 
 <CodeBlock language="go" filename="user_roles.go">
 {`/**
- * @gqlEnum(name:"Role", description:"User role in the system")
+ * @GqlEnum(name:"Role", description:"User role in the system")
  */
 type UserRole string
 
 const (
-UserRoleAdmin UserRole = "admin" // @gqlEnumValue(name:"ADMIN", description:"Administrator with full access")
-UserRoleEditor UserRole = "editor" // @gqlEnumValue(name:"EDITOR", description:"Can edit content")
-UserRoleViewer UserRole = "viewer" // @gqlEnumValue(name:"VIEWER", description:"Read-only access")
+UserRoleAdmin UserRole = "admin" // @GqlEnumValue(name:"ADMIN", description:"Administrator with full access")
+UserRoleEditor UserRole = "editor" // @GqlEnumValue(name:"EDITOR", description:"Can edit content")
+UserRoleViewer UserRole = "viewer" // @GqlEnumValue(name:"VIEWER", description:"Read-only access")
 )`}
 
 </CodeBlock>
@@ -69,16 +69,16 @@ You can also define enums using `iota`:
 
 <CodeBlock language="go" filename="permissions.go">
 {`/**
- * @gqlEnum
+ * @GqlEnum
  * Permission level for resources
  */
 type Permission int
 
 const (
-PermissionNone Permission = iota // @gqlEnumValue(name:"NONE", description:"No permissions")
-PermissionRead // @gqlEnumValue(name:"READ", description:"Read access")
-PermissionWrite // @gqlEnumValue(name:"WRITE", description:"Write access")
-PermissionAdmin // @gqlEnumValue(name:"ADMIN", description:"Full administrative access")
+PermissionNone Permission = iota // @GqlEnumValue(name:"NONE", description:"No permissions")
+PermissionRead // @GqlEnumValue(name:"READ", description:"Read access")
+PermissionWrite // @GqlEnumValue(name:"WRITE", description:"Write access")
+PermissionAdmin // @GqlEnumValue(name:"ADMIN", description:"Full administrative access")
 )`}
 
 </CodeBlock>
@@ -123,7 +123,7 @@ ADMIN
 
 ## Auto-generated names
 
-If you do not specify `@gqlEnumValue(name:"...")`, GQLSchemaGen generates enum value names automatically:
+If you do not specify `@GqlEnumValue(name:"...")`, GQLSchemaGen generates enum value names automatically:
 
 - Strips the enum type prefix from the constant (e.g., `UserRoleAdmin → Admin`)
 - Converts the result to **SCREAMING_SNAKE_CASE** (`Admin → ADMIN`)
@@ -132,7 +132,7 @@ Example:
 
 <CodeBlock language="go" filename="status.go">
   {`/**
-  * @gqlEnum
+  * @GqlEnum
   */
   type Status string
 
@@ -160,14 +160,14 @@ You can mark enum values as deprecated with the `deprecated` parameter:
 
 <CodeBlock language="go" filename="order_status.go">
   {`/**
-    * @gqlEnum
+    * @GqlEnum
     */
     type OrderStatus string
 
 const (
-OrderStatusPending OrderStatus = "pending" // @gqlEnumValue(name:"PENDING")
-OrderStatusCancelled OrderStatus = "cancelled" // @gqlEnumValue(name:"CANCELLED", deprecated:"Use REJECTED instead")
-OrderStatusRejected OrderStatus = "rejected" // @gqlEnumValue(name:"REJECTED")
+OrderStatusPending OrderStatus = "pending" // @GqlEnumValue(name:"PENDING")
+OrderStatusCancelled OrderStatus = "cancelled" // @GqlEnumValue(name:"CANCELLED", deprecated:"Use REJECTED instead")
+OrderStatusRejected OrderStatus = "rejected" // @GqlEnumValue(name:"REJECTED")
 )`}
 
 </CodeBlock>
@@ -191,7 +191,7 @@ For example, you could define the enum type in one package:
 <CodeBlock language="go" filename="types/status.go">
 {`package types
 
-// @gqlEnum
+// @GqlEnum
 type Status string`}
 
 </CodeBlock>
@@ -217,11 +217,11 @@ When you run `gqlschemagen generate`, the generated GraphQL enum will correctly 
 
 ## Using enums in object types
 
-Once an enum is defined, it can be used in `@gqlType` annotated structs just like any other type:
+Once an enum is defined, it can be used in `@GqlType` annotated structs just like any other type:
 
 <CodeBlock language="go" filename="user.go">
   {`/**
-   * @gqlType
+   * @GqlType
    */
   type User struct {
     ID   string   \`gql:"id,type:ID"\`
@@ -233,14 +233,14 @@ Once an enum is defined, it can be used in `@gqlType` annotated structs just lik
 
 ## Directive Parameters
 
-### `@gqlEnum`
+### `@GqlEnum`
 
 | Parameter     | Description                                                      |
 | ------------- | ---------------------------------------------------------------- |
 | `name`        | Optional custom GraphQL enum name. Defaults to the Go type name. |
 | `description` | Optional description for the enum, used as a doc string.         |
 
-### `@gqlEnumValue`
+### `@GqlEnumValue`
 
 | Parameter     | Description                                                                    |
 | ------------- | ------------------------------------------------------------------------------ |

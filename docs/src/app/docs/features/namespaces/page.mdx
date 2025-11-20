@@ -20,17 +20,17 @@ GQLSchemaGen supports **namespaces**, which allow you to control where generated
 
 ## File-Level Namespaces
 
-To apply a namespace to all types in a file, use `@gqlNamespace` above your type definitions:
+To apply a namespace to all types in a file, use `@GqlNamespace` above your type definitions:
 
 <CodeBlock language="go" filename="models/user_product.go">
 {`package models
 /**
-* @gqlNamespace(name:"api/v1")
+* @GqlNamespace(name:"api/v1")
   */
 
 /\*\*
 
-- @gqlType(name:"User")
+- @GqlType(name:"User")
   \*/
   type User struct {
   ID string \`gql:"id,type:ID"\`
@@ -39,7 +39,7 @@ To apply a namespace to all types in a file, use `@gqlNamespace` above your type
 
 /\*\*
 
-- @gqlType(name:"Product")
+- @GqlType(name:"Product")
   \*/
   type Product struct {
   ID string \`gql:"id,type:ID"\`
@@ -58,16 +58,16 @@ Behavior depends on your output strategy:
 
 ## Type-Level Namespace Overrides
 
-You can override the file-level namespace for specific types by setting the `namespace` parameter on `@gqlType`, `@gqlInput`, or `@gqlEnum`:
+You can override the file-level namespace for specific types by setting the `namespace` parameter on `@GqlType`, `@GqlInput`, or `@GqlEnum`:
 
 <CodeBlock language="go" filename="models/user_product_override.go">
 {`/**
- * @gqlNamespace(name:"common")
+ * @GqlNamespace(name:"common")
  */
 
 /\*\*
 
-- @gqlType(name:"User", namespace:"user/auth")
+- @GqlType(name:"User", namespace:"user/auth")
   \*/
   type User struct {
   ID string \`gql:"id,type:ID"\`
@@ -75,7 +75,7 @@ You can override the file-level namespace for specific types by setting the `nam
 
 /\*\*
 
-- @gqlType(name:"Product")
+- @GqlType(name:"Product")
   \*/
   type Product struct {
   ID string \`gql:"id,type:ID"\`
@@ -95,16 +95,16 @@ When using the **single strategy**, types from multiple files that share the sam
 
 <CodeBlock language="go" filename="user.go">
   {`/**
- * @gqlNamespace(name:"api/v1")
- * @gqlType(name:"User")
+ * @GqlNamespace(name:"api/v1")
+ * @GqlType(name:"User")
  */
 type User struct { ID string }`}
 </CodeBlock>
 
 <CodeBlock language="go" filename="product.go">
   {`/**
- * @gqlNamespace(name:"api/v1")
- * @gqlType(name:"Product")
+ * @GqlNamespace(name:"api/v1")
+ * @GqlType(name:"Product")
  */
 type Product struct { ID string }`}
 </CodeBlock>
@@ -147,14 +147,14 @@ You can change the separator if you prefer a flat file structure with a differen
 
 | Directive                           | Parameter         | Description                                                           |
 | ----------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| `@gqlNamespace`                     | `name` (required) | The namespace path for generated files (e.g., `api/v1`, `user/auth`). |
-| `@gqlType`, `@gqlInput`, `@gqlEnum` | `namespace`       | Optional type-level override of the file-level namespace.             |
+| `@GqlNamespace`                     | `name` (required) | The namespace path for generated files (e.g., `api/v1`, `user/auth`). |
+| `@GqlType`, `@GqlInput`, `@GqlEnum` | `namespace`       | Optional type-level override of the file-level namespace.             |
 
 ---
 
 ## Notes
 
-- File-level `@gqlNamespace` must appear before any type, input, or enum definitions in the file.
+- File-level `@GqlNamespace` must appear before any type, input, or enum definitions in the file.
 - Types without a namespace are generated into the root output directory.
 - Type-level namespaces always override file-level namespaces.
 - Using single strategy without namespaces combines all types into a single schema file.
