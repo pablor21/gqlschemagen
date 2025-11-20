@@ -116,16 +116,36 @@ Use `@GqlTypeExtraField` for type-only additions, and `@GqlExtraField` when inpu
 
 Use these directives to control which Go structs and fields are included in your GraphQL schema and how additional fields are added.
 
-| Directive            | Parameter     | Description                                                                 | Example                             |
-| -------------------- | ------------- | --------------------------------------------------------------------------- | ----------------------------------- |
-| `@GqlType`           | `name`        | The GraphQL type name to generate.                                          | `"UserProfile"`                     |
-| `@GqlType`           | `description` | Documentation for the GraphQL type, included in the schema as a doc string. | `"Represents a user in the system"` |
-| `@GqlType`           | `omitFields`  | Comma-separated list of struct fields to exclude from the schema.           | `"Password,SecretToken"`            |
-| `@GqlTypeExtraField` | `name`        | Name of an additional field to include in the GraphQL type.                 | `"posts"`                           |
-| `@GqlTypeExtraField` | `type`        | GraphQL type for the extra field.                                           | `"[Post!]!"`                        |
-| `@GqlTypeExtraField` | `description` | Documentation string for the extra field.                                   | `"User's posts"`                    |
-| `@GqlTypeExtraField` | `resolver`    | Optional Go resolver function for computed fields.                          | `"ComputePosts"`                    |
-| `@GqlTypeExtraField` | `tags`        | Optional Go struct tags to attach to the field.                             | `"json:\"user_posts\""`             |
+| Directive            | Parameter     | Description                                                                                                                          | Example                                     |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `@GqlType`           | `name`        | The GraphQL type name to generate.                                                                                                   | `"UserProfile"`                             |
+| `@GqlType`           | `description` | Documentation for the GraphQL type, included in the schema as a doc string.                                                          | `"Represents a user in the system"`         |
+| `@GqlType`           | `omitFields`  | Comma-separated list of struct fields to exclude from the schema.                                                                    | `"Password,SecretToken"`                    |
+| `@GqlTypeExtraField` | `name`        | Name of an additional field to include in the GraphQL type.                                                                          | `"posts"`                                   |
+| `@GqlTypeExtraField` | `type`        | GraphQL type for the extra field.                                                                                                    | `"[Post!]!"`                                |
+| `@GqlTypeExtraField` | `description` | Documentation string for the extra field.                                                                                            | `"User's posts"`                            |
+| `@GqlTypeExtraField` | `resolver`    | Optional Go resolver function for computed fields.                                                                                   | `"ComputePosts"`                            |
+| `@GqlTypeExtraField` | `tags`        | Optional Go struct tags to attach to the field.                                                                                      | `"json:\"user_posts\""`                     |
+| `@GqlTypeExtraField` | `on`          | Optional list of type names this field should apply to. Defaults to `*` (all types). Supports comma-separated lists or array syntax. | `on:"Type1,Type2"` / `on:["Type1","Type2"]` |
+
+---
+
+### Accepted formats for `on`
+
+* **Comma-separated string**
+  `on:"Type1,Type2"`
+
+* **Array (double quotes)**
+  `on:["Type1","Type2"]`
+
+* **Array (single quotes)**
+  `on:['Type1','Type2']`
+
+* **Apply to none**
+  `on:[]` or `on:""`
+
+* **Apply to all types (wildcard)**
+  `on:"*"` or `on:["*"]`
 
 <Alert
   title="Important"
