@@ -1,0 +1,145 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Keeping Schema Modifications",
+  description:
+    "How to preserve custom schema changes when regenerating schemas with GQLSchemaGen.",
+};
+
+# Keeping Schema Modifications
+
+GQLSchemaGen is designed to be a **source-of-truth generator**: your Go structs define the schema, and running the generator keeps everything in sync.
+However, real-world GraphQL schemas often require **hand-written additions**—custom directives, complex unions, helper scalars, comments, or special fields that don’t belong in Go models.
+
+To support this, the generator includes a built-in mechanism to **preserve hand-written modifications** across regenerations.
+
+---
+
+## How Preservation Works
+
+You can wrap any part of a generated schema with special markers:
+
+<CodeBlock language="graphql" filename="schema.graphql">
+  {`# @GqlKeepBegin
+# Any custom schema content you want to preserve
+directive @auth(role: String!) on FIELD_DEFINITION
+# @GqlKeepEnd`}
+</CodeBlock>
+
+Anything between these markers is:
+
+- **Read from the existing schema file**
+- **Not touched** during regeneration
+- **Reinserted** at the configured placement (start or end)
+
+This allows you to safely mix generated content with manual edits without losing work.
+
+---
+
+## What You Can Keep
+
+The preserved block can contain any GraphQL schema definition:
+
+- Custom directives
+- Manually added `union` definitions
+- Extra fields on generated types
+- Comments or documentation blocks
+- Temporary or experimental schema pieces
+- Custom imports for downstream tools (e.g., Apollo Federation directives)
+
+GQLSchemaGen treats the preserved block as opaque text—it doesn’t parse it, modify it, or validate it.
+
+---
+
+## Marker Details
+
+The default markers are:
+
+```graphql
+# @GqlKeepBegin
+# @GqlKeepEnd
+```
+
+They must be placed on their own lines. Anything between them is kept exactly as-is.
+
+You can place the markers:
+
+- **Inside a type** (adds custom fields)
+- **At the top of the schema** (directives, scalars)
+- **At the bottom of the schema** (extra types, unions)
+- **Between namespaces** if you’re generating into multiple directories
+
+The generator will locate these blocks before regenerating the file and restore them afterward.
+
+---
+
+## Example: Adding Custom Fields
+
+<CodeBlock language="graphql" filename="User.graphql">
+{`type User {
+  id: ID!
+  name: String!
+
+# @GqlKeepBegin
+
+# Adds a computed field that isn't part of the Go model
+
+profileUrl: String!
+
+# @GqlKeepEnd
+
+}`} </CodeBlock>
+
+On the next regeneration, the `profileUrl` field is preserved.
+
+---
+
+## Example: Adding a Custom Directive
+
+<CodeBlock language="graphql" filename="schema.graphql">
+{`# @GqlKeepBegin
+directive @auth(role: String!) on FIELD_DEFINITION | OBJECT
+# @GqlKeepEnd
+
+type Query {
+hello: String!
+}`} </CodeBlock>
+
+Even if the generator rewrites the entire file, your directive stays intact.
+
+---
+
+## Controlling Placement via Configuration
+
+By default, preserved blocks are placed at the **end** of a generated schema file.
+You can change this behavior in your `gqlschemagen.yml`:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`# Placement of preserved sections in the final schema file
+# Options: "start" or "end"
+keep_section_placement: "end"
+
+# Markers used to detect preserved sections
+
+keep_begin_marker: "# @GqlKeepBegin"
+keep_end_marker: "# @GqlKeepEnd"`} </CodeBlock>
+
+### Placement Options
+
+| Value   | Effect                                                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `start` | Your preserved modifications appear **at the top** of the generated schema. Useful for directives or scalar definitions. |
+| `end`   | Preserved code is appended **after** the generated content. Best for unions, extra types, or helper fields.              |
+
+Marker strings can be customised if your project already uses similar comment patterns.
+
+---
+
+## Notes & Best Practices
+
+- **One keep block per file is recommended**, but multiple blocks are supported.
+- The generator will warn if markers are malformed or mismatched.
+- Avoid placing `@GqlKeep` blocks inside lists or enums unless intentional; they will be preserved verbatim.
+- If you're working with version control, it’s often helpful to commit schema files before regenerating so you can easily compare changes.
+
+<NextButton href="/docs/integrations/gqlgen">GQLGen</NextButton>

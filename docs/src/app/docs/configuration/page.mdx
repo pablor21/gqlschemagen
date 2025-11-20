@@ -1,9 +1,9 @@
 import NextButton from "@/components/docs/next-button";
 
 export const metadata = {
-  title: "GQLSchemaGen Configuration",
+  title: "Configuration",
   description:
-    "Learn how to configure GQLSchemaGen using the gqlschemagen.yml file.",
+    "Learn how to configure GQLSchemaGen using a YAML file to control output paths, markers, namespaces, enums, and more.",
 };
 
 # Configuration
@@ -117,6 +117,7 @@ skip_existing: false`}
 After creating the `gqlschemagen.yml`, you can start generating schemas for your annotated structs:
 
 {" "}
+
 <Snippet>gqlschemagen generate</Snippet>
 
 <CodeBlock className="mt-4" language="graphql" filename="schema.graphql">

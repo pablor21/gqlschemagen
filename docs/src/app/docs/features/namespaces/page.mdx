@@ -1,9 +1,9 @@
 import NextButton from "@/components/docs/next-button";
 
 export const metadata = {
-  title: "GQLSchemaGen: Namespaces",
+  title: "Namespaces",
   description:
-    "Learn how to organize generated GraphQL schema files using namespaces in GQLSchemaGen.",
+    "Organize your generated schema into directory-based namespaces to keep large GraphQL schemas maintainable.",
 };
 
 # Namespaces
@@ -28,22 +28,24 @@ To apply a namespace to all types in a file, use `@gqlNamespace` above your type
 * @gqlNamespace(name:"api/v1")
   */
 
-/**
-* @gqlType(name:"User")
-  */
+/\*\*
+
+- @gqlType(name:"User")
+  \*/
   type User struct {
   ID string \`gql:"id,type:ID"\`
   Name string
   }
 
-/**
-  * @gqlType(name:"Product")
-  */
+/\*\*
+
+- @gqlType(name:"Product")
+  \*/
   type Product struct {
   ID string \`gql:"id,type:ID"\`
   Title string
   }`}
-</CodeBlock>
+  </CodeBlock>
 
 Behavior depends on your output strategy:
 
@@ -63,16 +65,18 @@ You can override the file-level namespace for specific types by setting the `nam
  * @gqlNamespace(name:"common")
  */
 
-/**
- * @gqlType(name:"User", namespace:"user/auth")
-  */
+/\*\*
+
+- @gqlType(name:"User", namespace:"user/auth")
+  \*/
   type User struct {
   ID string \`gql:"id,type:ID"\`
   }
 
-/**
- * @gqlType(name:"Product")
-  */
+/\*\*
+
+- @gqlType(name:"Product")
+  \*/
   type Product struct {
   ID string \`gql:"id,type:ID"\`
   }`}
@@ -88,7 +92,6 @@ Resulting schema files:
 ## Combining Namespaces Across Files
 
 When using the **single strategy**, types from multiple files that share the same namespace are merged into a single schema file. For example:
-
 
 <CodeBlock language="go" filename="user.go">
   {`/**
@@ -163,3 +166,7 @@ Once your namespaces are configured, running:
 <Snippet>gqlschemagen generate</Snippet>
 
 will place your schema files according to the namespace rules.
+
+<NextButton href="/docs/features/keeping-schema-modifications">
+  Keeping Schema Modifications
+</NextButton>

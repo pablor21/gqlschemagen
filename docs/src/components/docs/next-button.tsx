@@ -10,7 +10,7 @@ export default function NextButton({
   ...props
 }: ButtonProps & LinkProps) {
   return (
-    <div className="mt-12 flex justify-end">
+    <div className="mt-12 flex justify-end not-prose">
       <Button
         color="primary"
         variant="flat"

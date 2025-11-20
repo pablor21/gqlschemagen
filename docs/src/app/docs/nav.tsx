@@ -27,6 +27,10 @@ const docsNavItems = [
       { label: "GQL Inputs", href: "/docs/features/gql-inputs" },
       { label: "GQL Enums", href: "/docs/features/gql-enums" },
       { label: "Namespaces", href: "/docs/features/namespaces" },
+      {
+        label: "Keeping Schema Modifications",
+        href: "/docs/features/keeping-schema-modifications",
+      },
     ],
   },
   {
