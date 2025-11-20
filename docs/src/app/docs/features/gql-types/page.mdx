@@ -1,0 +1,130 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "GQLSchemaGen: GraphQL Types",
+  description:
+    "Learn how to generate GraphQL object types from Go structs using GQLSchemaGen and the @gqlType annotation.",
+};
+
+# GQL Types
+
+<Alert
+  title="Opt-in Schema Generation"
+  description="Only structs annotated with `@gqlType` will be included in your GraphQL schema. Make sure to explicitly add this annotation to any type you want generated."
+  color="warning"
+/>
+
+GQLSchemaGen generates GraphQL object types directly from your Go structs, but only for types that are explicitly annotated. To include a struct in schema generation, add the `@gqlType` annotation above your type:
+
+<CodeBlock language="go" filename="user.go">
+  {`/**
+ * @gqlType(name:"UserProfile",description:"Represents a user in the system")
+ */
+type User struct {
+    ID   string
+    Name string
+}`}
+</CodeBlock>
+
+This will produce:
+
+<CodeBlock language="graphql" filename="schema.graphql">
+  {`"""Represents a user in the system"""
+type UserProfile @goModel(model: "your-package.User") {
+  id: ID!
+  name: String!
+}`}
+</CodeBlock>
+
+---
+
+## Additional Fields with `@gqlTypeExtraField`
+
+You can also add fields that do not exist in your Go struct using the `@gqlTypeExtraField` directive:
+
+<CodeBlock language="go" filename="user.go">
+  {`/**
+  * @gqlType(name:"UserProfile",description:"Represents a user in the system")
+  * @gqlTypeExtraField(name:"posts",type:"[Post!]!",description:"User's posts")
+  */
+type User struct {
+    ID   string
+    Name string
+}`}
+</CodeBlock>
+
+This generates a `posts` field on `UserProfile` without requiring it in your Go struct:
+
+<CodeBlock language="graphql" filename="schema.graphql">
+  {`"""Represents a user in the system"""
+type UserProfile @goModel(model: "your-package.User") {
+  id: ID!
+  name: String!
+  """User's posts"""
+  posts: [Post!]!
+}`}
+</CodeBlock>
+
+---
+
+## Directive Parameters Reference
+
+Use these directives to control which Go structs and fields are included in your GraphQL schema and how additional fields are added.
+
+| Directive            | Parameter     | Description                                                                 | Example                             |
+| -------------------- | ------------- | --------------------------------------------------------------------------- | ----------------------------------- |
+| `@gqlType`           | `name`        | The GraphQL type name to generate.                                          | `"UserProfile"`                     |
+| `@gqlType`           | `description` | Documentation for the GraphQL type, included in the schema as a doc string. | `"Represents a user in the system"` |
+| `@gqlType`           | `omitFields`  | Comma-separated list of struct fields to exclude from the schema.           | `"Password,SecretToken"`            |
+| `@gqlTypeExtraField` | `name`        | Name of an additional field to include in the GraphQL type.                 | `"posts"`                           |
+| `@gqlTypeExtraField` | `type`        | GraphQL type for the extra field.                                           | `"[Post!]!"`                        |
+| `@gqlTypeExtraField` | `description` | Documentation string for the extra field.                                   | `"User's posts"`                    |
+| `@gqlTypeExtraField` | `resolver`    | Optional Go resolver function for computed fields.                          | `"ComputePosts"`                    |
+| `@gqlTypeExtraField` | `tags`        | Optional Go struct tags to attach to the field.                             | `"json:\"user_posts\""`             |
+
+<Alert
+  title="Important"
+  description="Only structs annotated with @gqlType are included in schema generation. Extra fields can be added to these types using @gqlTypeExtraField."
+  color="warning"
+/>
+
+---
+
+## Field-level Struct Tags
+
+Individual struct fields can be customized using the `gql:` struct tag. The first value in the tag is the GraphQL field name. If you omit it (leading comma), GQLSchemaGen uses the JSON tag or a transformed struct field name.
+
+| Option              | Description                                     | Example                                              |
+| ------------------- | ----------------------------------------------- | ---------------------------------------------------- |
+| First value         | Custom field name                               | `gql:"userId"` or `gql:"userId,type:ID"`             |
+| Omit name           | Use JSON tag or transformed name                | `gql:",type:ID"`                                     |
+| `type:value`        | Custom GraphQL type                             | `gql:"createdAt,type:DateTime"`                      |
+| `description:value` | Field documentation                             | `gql:"email,description:User's email"`               |
+| `deprecated`        | Mark field deprecated                           | `gql:"oldField,deprecated"`                          |
+| `deprecated:value`  | Mark field deprecated with reason               | `gql:"oldField,deprecated:\"Use newField instead\""` |
+| `ignore` / `omit`   | Skip field entirely                             | `gql:"ignore"`                                       |
+| `include`           | Include field even if `@gqlIgnoreAll` is used   | `gql:"include"`                                      |
+| `optional`          | Make field nullable (removes `!`)               | `gql:"age,optional"`                                 |
+| `required`          | Force non-null (adds `!`)                       | `gql:"email,required"`                               |
+| `forceResolver`     | Adds `@goField(forceResolver: true)` for gqlgen | `gql:"author,forceResolver"`                         |
+
+This gives you fine-grained control over how each field is represented in GraphQL without changing your Go type structure.
+
+---
+
+## Best Practices
+
+- Use descriptive names and doc strings to generate self-documenting GraphQL types.
+- Keep your Go struct fields aligned with your GraphQL type naming conventions (`camelCase` by default).
+- Use `@gqlTypeExtraField` for computed or virtual fields that exist only in GraphQL.
+- Avoid overusing `omitFields`; prefer defining minimal structs for API exposure if possible.
+
+---
+
+Once you have annotated your types, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+to produce your GraphQL schema. Your next steps could be exploring **enum generation** or **input types**, which are handled on separate pages.
+
+<NextButton href="/docs/features/gql-inputs">GQL Inputs</NextButton>

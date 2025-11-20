@@ -1,0 +1,165 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "GQLSchemaGen: Namespaces",
+  description:
+    "Learn how to organize generated GraphQL schema files using namespaces in GQLSchemaGen.",
+};
+
+# Namespaces
+
+<Alert
+  title="Organize Your Schema"
+  description="Namespaces let you organize generated GraphQL schema files into subdirectories. This is especially useful for large projects with many types, making the schema easier to navigate."
+  color="info"
+/>
+
+GQLSchemaGen supports **namespaces**, which allow you to control where generated schema files are placed. Namespaces can be applied at the file level or on individual types, and they work with all generation strategies (single, multiple, or package).
+
+---
+
+## File-Level Namespaces
+
+To apply a namespace to all types in a file, use `@gqlNamespace` above your type definitions:
+
+<CodeBlock language="go" filename="models/user_product.go">
+{`package models
+/**
+* @gqlNamespace(name:"api/v1")
+  */
+
+/**
+* @gqlType(name:"User")
+  */
+  type User struct {
+  ID string \`gql:"id,type:ID"\`
+  Name string
+  }
+
+/**
+  * @gqlType(name:"Product")
+  */
+  type Product struct {
+  ID string \`gql:"id,type:ID"\`
+  Title string
+  }`}
+</CodeBlock>
+
+Behavior depends on your output strategy:
+
+- **Multiple/package strategy:** Each type generates its own file under the namespace directory:
+  `{output}/api/v1/User.graphql` and `{output}/api/v1/Product.graphql`
+- **Single strategy:** All types in the namespace are combined into one file:
+  `{output}/api/v1.graphql`
+
+---
+
+## Type-Level Namespace Overrides
+
+You can override the file-level namespace for specific types by setting the `namespace` parameter on `@gqlType`, `@gqlInput`, or `@gqlEnum`:
+
+<CodeBlock language="go" filename="models/user_product_override.go">
+{`/**
+ * @gqlNamespace(name:"common")
+ */
+
+/**
+ * @gqlType(name:"User", namespace:"user/auth")
+  */
+  type User struct {
+  ID string \`gql:"id,type:ID"\`
+  }
+
+/**
+ * @gqlType(name:"Product")
+  */
+  type Product struct {
+  ID string \`gql:"id,type:ID"\`
+  }`}
+  </CodeBlock>
+
+Resulting schema files:
+
+- `User` → `{output}/user/auth/User.graphql` (type-level override)
+- `Product` → `{output}/common/Product.graphql` (file-level namespace)
+
+---
+
+## Combining Namespaces Across Files
+
+When using the **single strategy**, types from multiple files that share the same namespace are merged into a single schema file. For example:
+
+
+<CodeBlock language="go" filename="user.go">
+  {`/**
+ * @gqlNamespace(name:"api/v1")
+ * @gqlType(name:"User")
+ */
+type User struct { ID string }`}
+</CodeBlock>
+
+<CodeBlock language="go" filename="product.go">
+  {`/**
+ * @gqlNamespace(name:"api/v1")
+ * @gqlType(name:"Product")
+ */
+type Product struct { ID string }`}
+</CodeBlock>
+
+Both `User` and `Product` are generated into:
+
+```
+{output}/api/v1.graphql
+```
+
+---
+
+## Custom Namespace Separator
+
+By default, namespaces use `/` to create subdirectories:
+
+```yaml
+namespace_separator: "/" # default
+```
+
+You can change the separator if you prefer a flat file structure with a different naming convention:
+
+```yaml
+# namespace_separator: "." # e.g., api.v1.graphql
+```
+
+---
+
+## Strategy-Specific Behavior
+
+| Strategy | Namespace Behavior                                                               |
+| -------- | -------------------------------------------------------------------------------- |
+| Single   | Generates one file per unique namespace. Types sharing a namespace are combined. |
+| Multiple | Combines namespace path with type name: `{namespace}/{typename}.graphql`.        |
+| Package  | Combines namespace path with package name: `{namespace}/{package}.graphql`.      |
+
+---
+
+## Parameters
+
+| Directive                           | Parameter         | Description                                                           |
+| ----------------------------------- | ----------------- | --------------------------------------------------------------------- |
+| `@gqlNamespace`                     | `name` (required) | The namespace path for generated files (e.g., `api/v1`, `user/auth`). |
+| `@gqlType`, `@gqlInput`, `@gqlEnum` | `namespace`       | Optional type-level override of the file-level namespace.             |
+
+---
+
+## Notes
+
+- File-level `@gqlNamespace` must appear before any type, input, or enum definitions in the file.
+- Types without a namespace are generated into the root output directory.
+- Type-level namespaces always override file-level namespaces.
+- Using single strategy without namespaces combines all types into a single schema file.
+
+---
+
+Once your namespaces are configured, running:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+will place your schema files according to the namespace rules.

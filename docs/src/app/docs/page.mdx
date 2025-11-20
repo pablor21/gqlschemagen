@@ -1,0 +1,50 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "GQLSchemaGen Documentation",
+  description:
+    "Comprehensive documentation for GQLSchemaGen, the Go GraphQL schema generator.",
+};
+
+# Introduction
+
+GQLSchemaGen is a lightweight code-generation tool for Go projects that use GraphQL. It inspects your Go models and DTOs and produces a complete `schema.graphql` file, allowing you to keep your schema definition in sync with your types instead of maintaining it manually.
+
+The tool aims to reduce boilerplate, enforce consistency, and give teams a predictable way to map their Go structures to a GraphQL API. By relying on tags and simple configuration, it stays approachable even in larger projects with many models.
+
+## Goals
+
+- Provide a straightforward, annotation-driven workflow for generating GraphQL schemas.
+- Eliminate manual schema maintenance and the risk of type drift.
+- Support real-world Go codebases without forcing architectural changes.
+- Keep configuration minimal while offering flexibility through tags.
+- Generate clean, human-readable GraphQL output that can be committed and reviewed like any other file.
+
+## Features
+
+- **Schema generation from Go structs**
+  Reads your model and DTO packages and converts them into GraphQL object types.
+
+- **Support for directives and custom tags**
+  Add descriptions, field names, optionality, and directives through struct tags.
+
+- **Enum generation**
+  Converts Go enums (via `iota` or const values) into GraphQL enums.
+
+- **Input type generation**
+  Build input schemas directly from DTO structs designed for mutations or filters.
+
+- **Automatic handling of pointers, slices, maps, and nested types**
+  Produces correct nullability and GraphQL type mappings without manual intervention.
+
+- **Configurable output**
+  Control which packages are scanned, where files are written, and how names are mapped.
+
+- **Deterministic output for Git diff-friendly schemas**
+  Object, field, and enum ordering is stable, making reviews clean.
+
+---
+
+This site walks you through getting started, configuring the generator, tagging your structs, and integrating GQLSchemaGen into your development workflow.
+
+<NextButton href="/docs/getting-started">Getting Started</NextButton>
