@@ -24,7 +24,7 @@
 //	}
 //
 //	config := generator.NewConfig()
-//	config.Output = "schema.graphql"
+//	config.Output = "schema.graphqls"
 //
 //	gen := generator.NewGenerator(parser, config)
 //	err = gen.Run()
@@ -66,7 +66,7 @@ func (g *Generator) Run() error {
 	if g.Config.GenStrategy == GenStrategySingle && !hasNamespaces {
 		// For single strategy without namespaces, check if Output is a file path or directory
 		// If it ends with an extension, it's a file path - extract the directory
-		if strings.HasSuffix(g.Config.Output, ".graphql") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
+		if strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
 			outputDir = filepath.Dir(g.Config.Output)
 		} else {
 			outputDir = g.Config.Output
@@ -222,7 +222,7 @@ func (g *Generator) generateByNamespace(orders []string) error {
 			outFile = filepath.Join(g.Config.Output, g.Config.OutputFileName)
 		} else {
 			// Convert namespace to file path using configured separator
-			// e.g., "user/auth" with separator "/" becomes "user/auth.graphql"
+			// e.g., "user/auth" with separator "/" becomes "user/auth.graphqls"
 			namespacePath := namespace
 			if g.Config.NamespaceSeparator != "/" {
 				namespacePath = strings.ReplaceAll(namespace, g.Config.NamespaceSeparator, string(filepath.Separator))
@@ -467,7 +467,7 @@ func (g *Generator) generateSingleFile(orders []string) error {
 	// If Output ends with an extension (old style), use it directly
 	// If Output is a directory (new style), join with OutputFileName
 	var outFile string
-	if strings.HasSuffix(g.Config.Output, ".graphql") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
+	if strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".graphqls") || strings.HasSuffix(g.Config.Output, ".gql") {
 		// Old style: Output is the full file path
 		outFile = g.Config.Output
 	} else {

@@ -1259,7 +1259,7 @@ gqlschemagen generate [flags]
     
 --out, -o string
     Output directory or file path (default: "graph/schema/gqlschemagen.graphqls" for single, "graph/schema" for multiple)
-    For single strategy: can be a complete file path (e.g., "./schema/my.graphql") or directory (use with --output-file-name)
+    For single strategy: can be a complete file path (e.g., "./schema/my.graphqls") or directory (use with --output-file-name)
     For multiple/package strategies: must be a directory
 
 --output-file-name, -ofn string
@@ -1269,8 +1269,8 @@ gqlschemagen generate [flags]
 
 --output-file-extension string
     File extension for generated schema files (multiple/package strategies)
-    Default: ".graphql"
-    Examples: ".graphql", ".graphqls", ".gql"
+    Default: ".graphqls"
+    Examples: ".graphqls", ".graphqls", ".gql"
     
 --strategy, -s string
     Generation strategy: "single", "multiple", or "package" (default: "single")

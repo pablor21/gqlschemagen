@@ -34,7 +34,7 @@ type Person struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -104,7 +104,7 @@ type User struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -174,7 +174,7 @@ type User struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -244,7 +244,7 @@ type UserModel struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -323,7 +323,7 @@ type UserModel struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -399,7 +399,7 @@ type UserModel struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -477,7 +477,7 @@ type User struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -562,7 +562,7 @@ type UserModel struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -624,7 +624,7 @@ type Person struct {
 		t.Fatalf("Parser walk failed: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,

@@ -105,7 +105,7 @@ type Config struct {
 	KeepSectionPlacement string `yaml:"keep_section_placement"`
 
 	// Namespace separator for converting namespace to file paths
-	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphql")
+	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphqls")
 	NamespaceSeparator string `yaml:"namespace_separator"`
 }
 

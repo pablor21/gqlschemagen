@@ -165,7 +165,7 @@ type DBProduct struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
@@ -269,7 +269,7 @@ type SecureUser struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config with useJsonTag enabled
 	cfg := &generator.Config{
@@ -364,7 +364,7 @@ type User struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
@@ -456,7 +456,7 @@ type SecureUser struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
@@ -555,7 +555,7 @@ type User struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config with custom ModelPath
 	cfg := &generator.Config{
@@ -624,7 +624,7 @@ type UpdateUser struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
@@ -731,7 +731,7 @@ type Post struct {
 		t.Fatalf("Failed to write post file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
@@ -829,7 +829,7 @@ LastName  string
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	// Create config
 	cfg := &generator.Config{
