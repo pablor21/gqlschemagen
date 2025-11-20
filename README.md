@@ -1251,7 +1251,7 @@ gqlschemagen generate [flags]
 **Available Flags:**
 
 ```bash
---config, -f string
+--config, -c string
     Path to config file (default: "gqlschemagen.yml")
 
 --pkg, -p string
@@ -1262,7 +1262,7 @@ gqlschemagen generate [flags]
     For single strategy: can be a complete file path (e.g., "./schema/my.graphql") or directory (use with --output-file-name)
     For multiple/package strategies: must be a directory
 
---output-file-name string
+--output-file-name, -ofn string
     Filename to use when output is a directory (single strategy only)
     Default: "gqlschemagen.graphqls"
     Only used when --out is a directory, not a file path
@@ -1278,13 +1278,13 @@ gqlschemagen generate [flags]
     - multiple: One file per type
     - package: One file per Go package
     
---field-case, -c string
+--field-case, -case string
     Field name case transformation: "camel", "snake", "pascal", "original", or "none" (default: "camel")
     
 --use-json-tag bool
     Use json tag for field names instead of struct field name (default: true)
     
---gqlgen, --use-gqlgen-directives bool
+--use-gqlgen-directives, -gqlgen bool
     Generate @goModel and @goField directives for gqlgen (default: false)
 
 --model-path, -m string

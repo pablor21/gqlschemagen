@@ -127,26 +127,26 @@ func generateCommand(args []string) {
 		fmt.Fprintf(os.Stderr, "Usage: gqlschemagen generate [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Generate GraphQL schema from Go structs.\n\n")
 		fmt.Fprintf(os.Stderr, "Required flags:\n")
-		fmt.Fprintf(os.Stderr, "  --pkg, -p <path>              Root package dir to scan\n\n")
+		fmt.Fprintf(os.Stderr, "  --pkg, -p <path>              		Root package dir to scan\n\n")
 		fmt.Fprintf(os.Stderr, "Optional flags:\n")
-		fmt.Fprintf(os.Stderr, "  --config, -f <file>           Path to config file (default: gqlschemagen.yml)\n")
-		fmt.Fprintf(os.Stderr, "  --out, -o <path>              Output directory or file path (default: graph/schema)\n")
-		fmt.Fprintf(os.Stderr, "  --output-file-name <name>     Output file name for single strategy (default: gqlschemagen.graphqls)\n")
-		fmt.Fprintf(os.Stderr, "  --output-file-extension <ext> Output file extension for multiple/package strategies (default: .graphqls)\n")
-		fmt.Fprintf(os.Stderr, "  --strategy, -s <strategy>     Generation strategy: single or multiple (default: single)\n")
-		fmt.Fprintf(os.Stderr, "  --skip-existing               Skip generating files that already exist\n")
-		fmt.Fprintf(os.Stderr, "  --field-case, -c <case>       Field name case: camel, snake, pascal, original, none (default: camel)\n")
-		fmt.Fprintf(os.Stderr, "  --use-json-tag                Use json tag for field names (default: true)\n")
-		fmt.Fprintf(os.Stderr, "  --gqlgen                      Generate @goModel and @goField directives (default: false)\n")
-		fmt.Fprintf(os.Stderr, "  --model-path, -m <path>       Base path for @goModel directive\n")
-		fmt.Fprintf(os.Stderr, "  --strip-prefix <prefixes>     Comma-separated prefixes to strip from type names\n")
-		fmt.Fprintf(os.Stderr, "  --strip-suffix <suffixes>     Comma-separated suffixes to strip from type names\n")
-		fmt.Fprintf(os.Stderr, "  --add-type-prefix <prefix>    Prefix to add to GraphQL type names\n")
-		fmt.Fprintf(os.Stderr, "  --add-type-suffix <suffix>    Suffix to add to GraphQL type names\n")
-		fmt.Fprintf(os.Stderr, "  --add-input-prefix <prefix>   Prefix to add to GraphQL input names\n")
-		fmt.Fprintf(os.Stderr, "  --add-input-suffix <suffix>   Suffix to add to GraphQL input names\n")
-		fmt.Fprintf(os.Stderr, "  --schema-file-name <pattern>  Schema file name pattern for multiple mode (default: {model_name}.graphqls)\n")
-		fmt.Fprintf(os.Stderr, "  --include-empty-types         Include types with no fields\n")
+		fmt.Fprintf(os.Stderr, "  --config, -c <file>           		Path to config file (default: gqlschemagen.yml)\n")
+		fmt.Fprintf(os.Stderr, "  --out, -o <path>              		Output directory or file path (default: graph/schema)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-name, ofn <name>     Output file name for single strategy (default: gqlschemagen.graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --output-file-extension <ext> 		Output file extension for multiple/package strategies (default: .graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --strategy, -s <strategy>     		Generation strategy: single or multiple (default: single)\n")
+		fmt.Fprintf(os.Stderr, "  --skip-existing               		Skip generating files that already exist\n")
+		fmt.Fprintf(os.Stderr, "  --field-case, -case <case>       	Field name case: camel, snake, pascal, original, none (default: camel)\n")
+		fmt.Fprintf(os.Stderr, "  --use-json-tag                		Use json tag for field names (default: true)\n")
+		fmt.Fprintf(os.Stderr, "  --use-gqlgen-directives, -gqlgen   Generate @goModel and @goField directives (default: false)\n")
+		fmt.Fprintf(os.Stderr, "  --model-path, -m <path>       		Base path for @goModel directive\n")
+		fmt.Fprintf(os.Stderr, "  --strip-prefix <prefixes>     		Comma-separated prefixes to strip from type names\n")
+		fmt.Fprintf(os.Stderr, "  --strip-suffix <suffixes>     		Comma-separated suffixes to strip from type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-type-prefix <prefix>    		Prefix to add to GraphQL type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-type-suffix <suffix>    		Suffix to add to GraphQL type names\n")
+		fmt.Fprintf(os.Stderr, "  --add-input-prefix <prefix>   		Prefix to add to GraphQL input names\n")
+		fmt.Fprintf(os.Stderr, "  --add-input-suffix <suffix>   		Suffix to add to GraphQL input names\n")
+		fmt.Fprintf(os.Stderr, "  --schema-file-name <pattern>  		Schema file name pattern for multiple mode (default: {model_name}.graphqls)\n")
+		fmt.Fprintf(os.Stderr, "  --include-empty-types         		Include types with no fields\n")
 	}
 
 	// Preprocess args
@@ -158,12 +158,13 @@ func generateCommand(args []string) {
 
 	// Optional flags
 	configFile := fs.String("config", "gqlschemagen.yml", "path to config file")
-	fs.StringVar(configFile, "f", "gqlschemagen.yml", "short for --config")
+	fs.StringVar(configFile, "c", "gqlschemagen.yml", "short for --config")
 
 	out := fs.String("out", "", "output directory or file path")
 	fs.StringVar(out, "o", "", "short for --out")
 
 	outputFileName := fs.String("output-file-name", "", "output file name for single strategy")
+	fs.StringVar(outputFileName, "ofn", "", "short for --output-file-name")
 
 	outputFileExtension := fs.String("output-file-extension", "", "output file extension for multiple/package strategies")
 
@@ -173,12 +174,12 @@ func generateCommand(args []string) {
 	skipExisting := fs.Bool("skip-existing", false, "skip generating files that already exist")
 
 	fieldCase := fs.String("field-case", "camel", "field name case: camel, snake, pascal, original, or none")
-	fs.StringVar(fieldCase, "c", "camel", "short for --field-case")
+	fs.StringVar(fieldCase, "case", "camel", "short for --field-case")
 
 	useJsonTag := fs.Bool("use-json-tag", true, "use json tag for field names (priority: gql tag > json tag > struct field)")
 
-	useGqlGenDirectives := fs.Bool("gqlgen", false, "generate @goModel and @goField directives for gqlgen")
-	fs.BoolVar(useGqlGenDirectives, "use-gqlgen-directives", false, "long form of --gqlgen")
+	useGqlGenDirectives := fs.Bool("use-gqlgen-directives", false, "generate @goModel and @goField directives for gqlgen")
+	fs.BoolVar(useGqlGenDirectives, "gqlgen", false, "short for --use-gqlgen-directives")
 
 	modelPath := fs.String("model-path", "", "base path for @goModel directive (e.g., 'github.com/user/project/models')")
 	fs.StringVar(modelPath, "m", "", "short for --model-path")
@@ -231,7 +232,7 @@ func generateCommand(args []string) {
 			cfg.Packages = []string{*pkg}
 		case "out", "o":
 			cfg.Output = *out
-		case "output-file-name":
+		case "output-file-name", "ofn":
 			cfg.OutputFileName = *outputFileName
 		case "output-file-extension":
 			cfg.OutputFileExtension = *outputFileExtension
@@ -239,7 +240,7 @@ func generateCommand(args []string) {
 			cfg.GenStrategy = generator.GenStrategy(*strategy)
 		case "skip-existing":
 			cfg.SkipExisting = *skipExisting
-		case "field-case", "c":
+		case "field-case", "case":
 			cfg.FieldCase = generator.FieldCase(*fieldCase)
 		case "use-json-tag":
 			cfg.UseJsonTag = *useJsonTag
