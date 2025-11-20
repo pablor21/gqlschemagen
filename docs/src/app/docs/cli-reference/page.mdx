@@ -87,7 +87,7 @@ All flags support **long (`--flag`)** and **short (`-f`)** formats.
 <CodeBlock language="bash" filename="flags">
 {`gqlschemagen generate [flags]
 
---config, -f string
+--config, -c string
 Path to config file (default: "gqlschemagen.yml")
 
 --pkg, -p string
@@ -97,7 +97,7 @@ Root package directory to scan (required)
 Output directory or file path
 (default: "graph/schema/gqlschemagen.graphqls" for single strategy)
 
---output-file-name string
+--output-file-name, -ofn string
 Filename for single-strategy output (default: "gqlschemagen.graphqls")
 
 --output-file-extension string
@@ -106,13 +106,13 @@ File extension for multiple/package strategies (default: ".graphql")
 --strategy, -s string
 Generation strategy: "single", "multiple", or "package" (default: "single") - single: All types in one file - multiple: One file per type - package: One file per Go package
 
---field-case, -c string
+--field-case, -case string
 Field name case: "camel", "snake", "pascal", "original", or "none" (default: "camel")
 
 --use-json-tag bool
 Use json tag for field names (default: true)
 
---gqlgen, --use-gqlgen-directives bool
+--use-gqlgen-directives, -gqlgen bool
 Generate @goModel and @goField directives for gqlgen (default: false)
 
 --model-path, -m string
