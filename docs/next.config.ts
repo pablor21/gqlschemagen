@@ -1,10 +1,13 @@
 import type { NextConfig } from "next";
 import createMDX from "@next/mdx";
 
+const basePath = process.env.PAGES_BASE_PATH || "";
+console.log("Building with basePath:", basePath);
+
 const nextConfig: NextConfig = {
   pageExtensions: ["js", "jsx", "md", "mdx", "ts", "tsx"],
   output: "export",
-  basePath: process.env.PAGES_BASE_PATH,
+  basePath: basePath,
 };
 
 const withMDX = createMDX({
