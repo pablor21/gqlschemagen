@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/pablor21/gqlschemagen/generator"
+	"github.com/pablor21/gqlschemagen/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,6 +48,9 @@ func main() {
 		initCommand(os.Args[2:])
 	case "generate":
 		generateCommand(os.Args[2:])
+	case "version", "--version", "-v":
+		fmt.Printf("gqlschemagen %s\n", version.Get())
+		os.Exit(0)
 	case "--help", "-h", "help":
 		printUsage()
 	default:
@@ -112,8 +116,12 @@ func initCommand(args []string) {
 		log.Fatalf("Failed to read default config: %v", err)
 	}
 
+	// Replace the hardcoded version with the current version
+	configContent := string(configData)
+	configContent = strings.Replace(configContent, `tool_version: "0.1.11"`, `tool_version: "`+version.Get()+`"`, 1)
+
 	// Write to output file
-	if err := os.WriteFile(*output, configData, 0644); err != nil {
+	if err := os.WriteFile(*output, []byte(configContent), 0644); err != nil {
 		log.Fatalf("Failed to write config file: %v", err)
 	}
 

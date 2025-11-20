@@ -26,14 +26,16 @@ type UserWithPassword struct {
 
 // Example 3: Include Field in Specific Types
 // Use 'include:' to specify which types should have this field
+// Supports three syntax styles: "Type,Type", 'Type,Type', or [Type,Type]
 // @gqlType(name:"PublicUser")
 // @gqlType(name:"AdminUser")
 // @gqlType(name:"SuperAdminUser")
 type UserWithConditionalFields struct {
 	ID        string `gql:"id,type:ID"`
-	Name      string `gql:"name"`
-	Email     string `gql:"email,include:AdminUser,SuperAdminUser"` // Only in AdminUser and SuperAdminUser
-	SecretKey string `gql:"secretKey,include:SuperAdminUser"`       // Only in SuperAdminUser
+	Email     string `gql:"email,include:\"AdminUser,SuperAdminUser\""` // Double quotes
+	Phone     string `gql:"phone,include:'AdminUser,SuperAdminUser'"`   // Single quotes (alternative)
+	Address   string `gql:"address,include:[AdminUser,SuperAdminUser]"` // Square brackets (alternative)
+	SecretKey string `gql:"secretKey,include:SuperAdminUser"`           // Only in SuperAdminUser (single value)
 }
 
 // Example 4: Omit/Ignore Field from Specific Types
@@ -54,9 +56,10 @@ type UserWithOmissions struct {
 // @gqlInput(name:"AdminInput")
 // @gqlInput(name:"UserInput")
 type AccountData struct {
-	ID         string `gql:"id,type:ID,ro"`           // Read-only for all types
-	Name       string `gql:"name"`                    // In all types and inputs
-	SecretData string `gql:"secretData,ro:AdminView"` // Only in AdminView type, not in any inputs or UserView
+	ID         string  `gql:"id,type:ID,ro"`                     // Read-only for all types
+	Name       string  `gql:"name"`                              // In all types and inputs
+	SecretData string  `gql:"secretData,ro:AdminView"`           // Only in AdminView type (single value)
+	Balance    float64 `gql:"balance,ro:\"AdminView,UserView\""` // Read-only in both AdminView and UserView
 }
 
 // Example 6: Wildcard Usage
@@ -76,11 +79,11 @@ type SelectiveUser struct {
 // @gqlType(name:"UserV2")
 // @gqlType(name:"UserV3")
 type EvolvingUser struct {
-	ID       string `gql:"id,type:ID"`                  // In all versions
-	Name     string `gql:"name"`                        // In all versions
-	Email    string `gql:"email,include:UserV2,UserV3"` // Added in V2, kept in V3
-	Phone    string `gql:"phone,include:UserV3"`        // Added in V3 only
-	OldField string `gql:"oldField,omit:UserV2,UserV3"` // Only in V1, removed in V2+
+	ID       string `gql:"id,type:ID"`                      // In all versions
+	Name     string `gql:"name"`                            // In all versions
+	Email    string `gql:"email,include:\"UserV2,UserV3\""` // Added in V2, kept in V3
+	Phone    string `gql:"phone,include:UserV3"`            // Added in V3 only (single value)
+	OldField string `gql:"oldField,omit:\"UserV2,UserV3\""` // Only in V1, removed in V2+
 }
 
 // Example 8: Complex Scenario - Different Fields for Different Contexts
@@ -89,13 +92,13 @@ type EvolvingUser struct {
 // @gqlInput(name:"CreateProfileInput")
 // @gqlInput(name:"UpdateProfileInput")
 type ProfileData struct {
-	ID           string `gql:"id,type:ID,ro"`                            // Read-only in types
-	Username     string `gql:"username,ro:PublicProfile,PrivateProfile"` // Read-only in types, editable in inputs
-	DisplayName  string `gql:"displayName"`                              // In all
-	Email        string `gql:"email,omit:PublicProfile"`                 // Hidden from public view
-	Bio          string `gql:"bio"`                                      // In all
-	PrivateNotes string `gql:"privateNotes,include:PrivateProfile"`      // Only in private view
-	Password     string `gql:"password,wo"`                              // Write-only (inputs only)
+	ID           string `gql:"id,type:ID,ro"`                                // Read-only in types
+	Username     string `gql:"username,ro:\"PublicProfile,PrivateProfile\""` // Read-only in types, editable in inputs
+	DisplayName  string `gql:"displayName"`                                  // In all
+	Email        string `gql:"email,omit:PublicProfile"`                     // Hidden from public view (single value)
+	Bio          string `gql:"bio"`                                          // In all
+	PrivateNotes string `gql:"privateNotes,include:PrivateProfile"`          // Only in private view (single value)
+	Password     string `gql:"password,wo"`                                  // Write-only (inputs only)
 }
 
 // Summary of available tags:
@@ -108,13 +111,24 @@ type ProfileData struct {
 //   - omit            : Omit/ignore everywhere
 //   - ignore          : Omit/ignore everywhere (alias for omit)
 //
-// With type list (comma-separated, no spaces):
-//   - ro:TypeA,TypeB  : Read-only for TypeA and TypeB only
-//   - wo:InputA,InputB: Write-only for InputA and InputB only
-//   - rw:TypeA,TypeB  : Include in TypeA and TypeB (both types and inputs)
-//   - include:TypeA,TypeB : Include only in TypeA and TypeB
-//   - omit:TypeA,TypeB    : Exclude from TypeA and TypeB
-//   - ignore:TypeA,TypeB  : Exclude from TypeA and TypeB (alias for omit)
+// With single type:
+//   - ro:TypeName     : Read-only for TypeName only (no quotes needed)
+//   - wo:InputName    : Write-only for InputName only (no quotes needed)
+//   - include:TypeName: Include only in TypeName (no quotes needed)
+//   - omit:TypeName   : Exclude from TypeName (no quotes needed)
+//
+// With multiple types (REQUIRES QUOTES):
+//   - ro:"TypeA,TypeB"        : Read-only for TypeA and TypeB only
+//   - wo:"InputA,InputB"      : Write-only for InputA and InputB only
+//   - rw:"TypeA,TypeB"        : Include in TypeA and TypeB (both types and inputs)
+//   - include:"TypeA,TypeB"   : Include only in TypeA and TypeB
+//   - omit:"TypeA,TypeB"      : Exclude from TypeA and TypeB
+//   - ignore:"TypeA,TypeB"    : Exclude from TypeA and TypeB (alias for omit)
+//
+// Multiple types also support single quotes and square brackets:
+//   - include:'TypeA,TypeB'   : Single quotes (alternative syntax)
+//   - include:[TypeA,TypeB]   : Square brackets (alternative syntax)
+//   - You can mix styles: include:"A,B",omit:'C,D',ro:[E,F]
 //
 // Wildcard:
 //   - include:* or include : Include in all types/inputs
@@ -123,6 +137,7 @@ type ProfileData struct {
 //
 // Notes:
 //   - omit and ignore are aliases (same behavior)
-//   - When using type lists, separate names with commas and NO SPACES
-//   - The ':' is optional for flags without lists (e.g., 'ro' is same as 'ro:*')
+//   - Multiple types can use: "TypeA,TypeB" or 'TypeA,TypeB' or [TypeA,TypeB]
+//   - Single types don't need quotes: include:TypeName
+//   - Separate type names with commas (no spaces): "TypeA,TypeB,TypeC"
 //   - Type names in lists match the name specified in @gqlType/@gqlInput directives

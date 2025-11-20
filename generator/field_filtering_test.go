@@ -464,8 +464,8 @@ func TestFieldMultipleTypesList(t *testing.T) {
 type User struct {
 	ID      string ` + "`gql:\"id,type:ID\"`" + `
 	Name    string
-	Email   string ` + "`gql:\"email,include:UserV2,UserV3\"`" + `
-	Profile string ` + "`gql:\"profile,omit:UserV1,UserV2\"`" + `
+	Email   string ` + "`gql:\"email,include:\\\"UserV2,UserV3\\\"\"`" + `
+	Profile string ` + "`gql:\"profile,omit:\\\"UserV1,UserV2\\\"\"`" + `
 }
 `
 	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {

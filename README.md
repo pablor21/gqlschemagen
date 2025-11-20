@@ -554,7 +554,12 @@ input UserInput @goModel(model: "your-package.User") {
 - `name` (required): Field name in the GraphQL schema
 - `type` (required): GraphQL type (e.g., `String!`, `[Post!]!`, `User`)
 - `description` (optional): Field description
-- `on` (optional): Comma-separated list of type names to apply this field to. Defaults to `*` (all types)
+- `on` (optional): List of type names to apply this field to. Defaults to `*` (all types). Supports multiple formats:
+  - Comma-separated: `on:"Type1,Type2"`
+  - Array with double quotes: `on:["Type1","Type2"]`
+  - Array with single quotes: `on:['Type1','Type2']`
+  - Empty (apply to none): `on:[]` or `on:""`
+  - Wildcard (apply to all): `on:"*"` or `on:["*"]`
 
 **Using the `on` parameter:**
 
@@ -641,12 +646,36 @@ input UpdateUserInput {
 - `name` (required): Field name in the GraphQL schema
 - `type` (required): GraphQL type (e.g., `String!`, `ID`, `[String!]`)
 - `description` (optional): Field description
-- `on` (optional): Comma-separated list of input names to apply this field to. Defaults to `*` (all inputs)
+- `on` (optional): List of input names to apply this field to. Defaults to `*` (all inputs). Supports multiple formats:
+  - Comma-separated: `on:"Input1,Input2"`
+  - Array with double quotes: `on:["Input1","Input2"]`
+  - Array with single quotes: `on:['Input1','Input2']`
+  - Empty (apply to none): `on:[]` or `on:""`
+  - Wildcard (apply to all): `on:"*"` or `on:["*"]`
 
 **Notes:**
 - Extra fields automatically get `@goField(forceResolver: true)` for types when gqlgen directives are enabled
 - The `on` parameter accepts `*` (all), specific type/input names, or comma-separated lists
 - These fields must be implemented as resolvers (for types) or handled in your input processing (for inputs)
+
+**Array syntax examples:**
+
+```go
+/**
+ * @GqlInput(name:"CreateUserInput")
+ * @GqlInput(name:"UpdateUserInput")
+ * // Using array with double quotes
+ * @GqlInputExtraField(name:"password",type:"String!",on:["CreateUserInput"])
+ * // Using array with single quotes  
+ * @GqlInputExtraField(name:"confirmPassword",type:"String!",on:['CreateUserInput'])
+ * // Empty array - field won't be added to any input
+ * @GqlInputExtraField(name:"hidden",type:"String",on:[])
+ */
+type UserWithArraySyntax struct {
+    ID       string
+    Username string
+}
+```
 
 
 #### `@GqlExtraField(name:"fieldName",type:"FieldType",description:"desc",on:"Type1,Type2")`
@@ -688,7 +717,12 @@ input UserInput {
 - `name` (required): Field name in the GraphQL schema
 - `type` (required): GraphQL type (e.g., `String!`, `[Post!]!`, `User`)
 - `description` (optional): Field description
-- `on` (optional): Comma-separated list of type/input names to apply this field to. Defaults to `*` (all types and inputs)  
+- `on` (optional): List of type/input names to apply this field to. Defaults to `*` (all types and inputs). Supports multiple formats:
+  - Comma-separated: `on:"Type1,Type2"`
+  - Array with double quotes: `on:["Type1","Input1"]`
+  - Array with single quotes: `on:['Type1','Input1']`
+  - Empty (apply to none): `on:[]` or `on:""`
+  - Wildcard (apply to all): `on:"*"` or `on:["*"]`  
 
 
 #### `@GqlEnum(name:"EnumName",description:"desc")`
@@ -1044,19 +1078,19 @@ Control individual field behavior with `gql:` struct tag. The first part is alwa
 | `description:value` | Field description | `gql:"email,description:User's email"` |
 | `deprecated` | Mark field as deprecated (boolean) | `gql:"oldField,deprecated"` |
 | `deprecated:value` | Mark field as deprecated with reason | `gql:"oldField,deprecated:\"Use newField instead\""` |
-| `ignore\|omit [:list of types]` | Skip this field (optionally for specific types) | `gql:"ignore\|omit"` |
+| `ignore\|omit [:"list of types"]` | Skip this field (optionally for specific types) | `gql:"ignore\|omit"` |
 | `include[:list of types]` | Include even if @GqlIgnoreAll (optionally for specific types) | `gql:"include"` |
 | `optional` | Make field nullable (remove !) | `gql:"age,optional"` |
 | `required` | Force non-null (add !) | `gql:"email,required"` |
 | `forceResolver` | Add @goField(forceResolver: true) | `gql:"author,forceResolver"` |
-| `ro[:list of types]` | Read-only field (omit from inputs) | `gql:"createdAt,ro"` |
-| `wo[:list of types]` | Write-only field (omit from types) | `gql:"password,wo"` |
-| `rw[:list of types]` | Read-write field (include in both types and inputs) | `gql:"name,rw"` |
+| `ro[:"list of types"]` | Read-only field (omit from inputs) | `gql:"createdAt,ro"` |
+| `wo[:"list of types"]` | Write-only field (omit from types) | `gql:"password,wo"` |
+| `rw[:"list of types"]` | Read-write field (include in both types and inputs) | `gql:"name,rw"` |
 
 #### Notes
 
 - `omit` and `ignore` are aliases (identical behavior)
-- When using type lists, separate names with commas and **NO SPACES**
+- When using type lists, separate names with commas and sourounded by **SINGLE QUOTES OR [ ]**
 - The `:` is optional for flags without lists (e.g., `ro` is same as `ro:*`)
 - Type names in lists must match the names in `@GqlType` or `@GqlInput` directives
 - Combine with other tags: `gql:"fieldName,type:ID,ro,description:\"Read-only ID\""`
