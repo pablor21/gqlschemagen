@@ -74,7 +74,7 @@ const (
 
 	// Generate GraphQL schema
 	config := NewConfig()
-	config.Output = filepath.Join(tmpDir, "schema.graphql")
+	config.Output = filepath.Join(tmpDir, "schema.graphqls")
 	config.GenStrategy = GenStrategySingle
 
 	gen := NewGenerator(parser, config)
@@ -244,7 +244,7 @@ const (
 
 	// Generate and check output
 	config := NewConfig()
-	config.Output = filepath.Join(tmpDir, "schema.graphql")
+	config.Output = filepath.Join(tmpDir, "schema.graphqls")
 	config.GenStrategy = GenStrategySingle
 
 	gen := NewGenerator(parser, config)
@@ -338,7 +338,7 @@ const (
 
 	// Generate and verify
 	config := NewConfig()
-	config.Output = filepath.Join(tmpDir, "schema.graphql")
+	config.Output = filepath.Join(tmpDir, "schema.graphqls")
 	config.GenStrategy = GenStrategySingle
 
 	gen := NewGenerator(parser, config)
@@ -627,7 +627,7 @@ type User struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	cfg := &Config{
 		Packages:            []string{tmpDir},
@@ -703,7 +703,7 @@ type Product struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	cfg := &Config{
 		Packages:            []string{tmpDir},
@@ -757,7 +757,7 @@ type Order struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	cfg := &Config{
 		Packages:            []string{tmpDir},
@@ -834,7 +834,7 @@ type UpdateUserInput struct {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 
 	cfg := &Config{
 		Packages:            []string{tmpDir},
@@ -980,8 +980,8 @@ type Comment struct {
 	}
 
 	// Verify output files exist
-	usersSchema := filepath.Join(outDir, "users.graphql")
-	postsSchema := filepath.Join(outDir, "posts.graphql")
+	usersSchema := filepath.Join(outDir, "users.graphqls")
+	postsSchema := filepath.Join(outDir, "posts.graphqls")
 
 	if !FileExists(usersSchema) {
 		t.Errorf("Expected users.graphql to be generated")
@@ -1105,7 +1105,7 @@ type User struct {
 	}
 
 	// Verify output file exists
-	usersSchema := filepath.Join(outDir, "users.graphql")
+	usersSchema := filepath.Join(outDir, "users.graphqls")
 	if !FileExists(usersSchema) {
 		t.Fatalf("Expected users.graphql to be generated")
 	}
@@ -1220,7 +1220,7 @@ type Product struct {
 	}
 
 	// Both should be in models.graphql
-	modelsSchema := filepath.Join(outDir, "models.graphql")
+	modelsSchema := filepath.Join(outDir, "models.graphqls")
 	if !FileExists(modelsSchema) {
 		t.Fatalf("Expected models.graphql to be generated")
 	}
@@ -1342,16 +1342,16 @@ type Token struct {
 	}
 
 	// Both should be in api.graphql (not users.graphql or auth.graphql)
-	apiSchema := filepath.Join(outDir, "api.graphql")
+	apiSchema := filepath.Join(outDir, "api.graphqls")
 	if !FileExists(apiSchema) {
 		t.Fatalf("Expected api.graphql to be generated")
 	}
 
 	// Verify users.graphql and auth.graphql don't exist
-	if FileExists(filepath.Join(outDir, "users.graphql")) {
+	if FileExists(filepath.Join(outDir, "users.graphqls")) {
 		t.Errorf("users.graphql should not exist when namespace is specified")
 	}
-	if FileExists(filepath.Join(outDir, "auth.graphql")) {
+	if FileExists(filepath.Join(outDir, "auth.graphqls")) {
 		t.Errorf("auth.graphql should not exist when namespace is specified")
 	}
 
@@ -1484,7 +1484,7 @@ const (
 	}
 
 	// Generate schema
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -1568,7 +1568,7 @@ const (
 	}
 
 	// Generate schema
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,
@@ -1673,7 +1673,7 @@ const (
 	}
 
 	// Generate schema
-	outFile := filepath.Join(tmpDir, "schema.graphql")
+	outFile := filepath.Join(tmpDir, "schema.graphqls")
 	cfg := &Config{
 		Packages:            []string{tmpDir},
 		Output:              outFile,

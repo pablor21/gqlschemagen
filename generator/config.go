@@ -1,6 +1,16 @@
 package generator
 
-import "fmt"
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+var cfgFilenames = []string{".gqlschemagen.yml", "gqlschemagen.yml", "gqlschemagen.yaml"}
 
 // FieldCase determines how field names are formatted
 type FieldCase string
@@ -105,8 +115,65 @@ type Config struct {
 	KeepSectionPlacement string `yaml:"keep_section_placement"`
 
 	// Namespace separator for converting namespace to file paths
-	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphql")
+	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphqls")
 	NamespaceSeparator string `yaml:"namespace_separator"`
+
+	// ConfigDir is the directory where the config file was loaded from.
+	// This is used to resolve relative paths in the config.
+	// Not marshaled to/from YAML.
+	ConfigDir string `yaml:"-"`
+}
+
+// DetectGoModulePath searches for go.mod in current directory and parent directories,
+// and returns the module path. Returns empty string if go.mod is not found.
+func DetectGoModulePath() string {
+	// Start from current directory
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	// Search up to root
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			// Found go.mod, parse it to get module path
+			if modulePath := parseGoModModulePath(goModPath); modulePath != "" {
+				return modulePath
+			}
+		}
+
+		// Move to parent directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root
+			break
+		}
+		dir = parent
+	}
+
+	return ""
+}
+
+// parseGoModModulePath extracts the module path from go.mod file
+func parseGoModModulePath(goModPath string) string {
+	file, err := os.Open(goModPath)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "module ") {
+			// Extract module path (everything after "module ")
+			modulePath := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+			return modulePath
+		}
+	}
+
+	return ""
 }
 
 // NewConfig creates a new Config with defaults
@@ -118,10 +185,31 @@ func NewConfig() *Config {
 		GenStrategy:         GenStrategyMultiple,
 		SchemaFileName:      "{model_name}.graphqls",
 		OutputFileName:      "gqlschemagen.graphqls",
-		OutputFileExtension: ".graphql",
+		OutputFileExtension: ".graphqls",
 		IncludeEmptyTypes:   false,
 		NamespaceSeparator:  "/",
 	}
+}
+
+// NewConfigWithDefaults creates a new Config with smart defaults based on the current environment.
+// It auto-detects the Go module path and sets packages to current directory.
+func NewConfigWithDefaults() *Config {
+	cfg := NewConfig()
+
+	// Set current directory as ConfigDir
+	if cwd, err := os.Getwd(); err == nil {
+		cfg.ConfigDir = cwd
+	}
+
+	// Auto-detect module path from go.mod
+	if modulePath := DetectGoModulePath(); modulePath != "" {
+		cfg.ModelPath = modulePath
+	}
+
+	// Set packages to current directory
+	cfg.Packages = []string{"./"}
+
+	return cfg
 }
 
 // Normalize ensures config values are valid
@@ -141,7 +229,7 @@ func (c *Config) Normalize() {
 		c.OutputFileName = "gqlschemagen.graphqls"
 	}
 	if c.OutputFileExtension == "" {
-		c.OutputFileExtension = ".graphql"
+		c.OutputFileExtension = ".graphqls"
 	}
 
 	if c.KeepBeginMarker == "" {
@@ -210,6 +298,110 @@ func (c *Config) Normalize() {
 // 		}
 // 	}
 // }
+
+func findCfgInDir(dir string) string {
+	for _, cfgName := range cfgFilenames {
+		path := filepath.Join(dir, cfgName)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// FindConfig searches for the config file in this directory and all parents up the tree
+// looking for the closest match. Returns the path to the config file or empty string if not found.
+func FindConfig() string {
+	path, _ := findCfg()
+	return path
+}
+
+// findCfg searches for the config file in this directory and all parents up the tree
+// looking for the closest match
+func findCfg() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("unable to get working dir to findCfg: %w", err)
+	}
+
+	cfg := findCfgInDir(dir)
+
+	for cfg == "" && dir != filepath.Dir(dir) {
+		dir = filepath.Dir(dir)
+		cfg = findCfgInDir(dir)
+	}
+
+	if cfg == "" {
+		return "", os.ErrNotExist
+	}
+
+	return cfg, nil
+}
+
+// LoadConfig attempts to find and load a config file automatically.
+// It searches for config files (.gqlschemagen.yml, gqlschemagen.yml, gqlschemagen.yaml)
+// in the current directory and parent directories.
+// Returns a config with defaults if no config file is found.
+func LoadConfig() (*Config, error) {
+	cfgPath, err := findCfg()
+	if err != nil {
+		// No config file found, return default config
+		cfg := NewConfig()
+		cfg.Normalize()
+		return cfg, nil
+	}
+
+	return LoadConfigFromFile(cfgPath)
+}
+
+// LoadConfigFromFile loads a config from the specified file path.
+// It stores the config file's directory in ConfigDir and resolves all relative paths
+// in the config relative to that directory.
+func LoadConfigFromFile(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file %s: %w", path, err)
+	}
+
+	// Store the directory where config was found
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for config: %w", err)
+	}
+	cfg.ConfigDir = filepath.Dir(absPath)
+
+	// Resolve all relative paths in the config relative to ConfigDir
+	cfg.resolveRelativePaths()
+
+	cfg.Normalize()
+	return &cfg, nil
+}
+
+// resolveRelativePaths converts all relative paths in the config to be relative to ConfigDir.
+// This ensures that paths work correctly when the config is loaded from a different directory
+// than where the command is run (e.g., with //go:generate).
+func (c *Config) resolveRelativePaths() {
+	if c.ConfigDir == "" {
+		return
+	}
+
+	// Resolve package paths
+	for i, pkg := range c.Packages {
+		if !filepath.IsAbs(pkg) {
+			c.Packages[i] = filepath.Join(c.ConfigDir, pkg)
+		}
+	}
+
+	// Resolve output path
+	if c.Output != "" && !filepath.IsAbs(c.Output) {
+		c.Output = filepath.Join(c.ConfigDir, c.Output)
+	}
+}
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
