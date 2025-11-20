@@ -28,7 +28,7 @@ type User struct {
 
 This will produce:
 
-<CodeBlock language="graphql" filename="schema.graphql">
+<CodeBlock language="graphql" filename="schemagraphqls">
   {`"""Represents a user in the system"""
 type UserProfile @goModel(model: "your-package.User") {
   id: ID!
@@ -62,7 +62,7 @@ type User struct {
 
 This generates a `posts` field on the GraphQL type without requiring it in your Go struct:
 
-<CodeBlock language="graphql" filename="schema.graphql">
+<CodeBlock language="graphql" filename="schemagraphqls">
   {`"""Represents a user in the system"""
 type UserProfile @goModel(model: "your-package.User") {
   id: ID!
@@ -91,7 +91,7 @@ type User struct {
 
 This produces the field on both structures:
 
-<CodeBlock language="graphql" filename="schema.graphql">
+<CodeBlock language="graphql" filename="schemagraphqls">
   {`type User @goModel(model: "your-package.User") {
   id: ID!
   username: String!
