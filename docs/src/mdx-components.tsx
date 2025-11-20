@@ -10,7 +10,7 @@ export function useMDXComponents(): MDXComponents {
       <Snippet
         classNames={{
           ...classNames,
-          base: cn("max-w-full", classNames?.base),
+          base: cn("max-w-full my-2", classNames?.base),
           pre: cn("flex gap-2 whitespace-pre-wrap leading-5", classNames?.pre),
         }}
         className={cn("not-prose", className)}
@@ -21,14 +21,14 @@ export function useMDXComponents(): MDXComponents {
       <Alert
         classNames={{
           ...classNames,
-          base: cn("not-prose", classNames?.base),
+          base: cn("not-prose my-2", classNames?.base),
           description: cn("prose", classNames?.description),
         }}
         {...props}
       />
     ),
     CodeBlock: ({ className, ...props }) => (
-      <CodeBlock className={cn("not-prose", className)} {...props} />
+      <CodeBlock className={cn("not-prose my-2", className)} {...props} />
     ),
     /* pre: ({ children }) => (
       <CodeBlock
