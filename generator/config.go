@@ -1,9 +1,11 @@
 package generator
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -122,6 +124,58 @@ type Config struct {
 	ConfigDir string `yaml:"-"`
 }
 
+// DetectGoModulePath searches for go.mod in current directory and parent directories,
+// and returns the module path. Returns empty string if go.mod is not found.
+func DetectGoModulePath() string {
+	// Start from current directory
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	// Search up to root
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			// Found go.mod, parse it to get module path
+			if modulePath := parseGoModModulePath(goModPath); modulePath != "" {
+				return modulePath
+			}
+		}
+
+		// Move to parent directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root
+			break
+		}
+		dir = parent
+	}
+
+	return ""
+}
+
+// parseGoModModulePath extracts the module path from go.mod file
+func parseGoModModulePath(goModPath string) string {
+	file, err := os.Open(goModPath)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "module ") {
+			// Extract module path (everything after "module ")
+			modulePath := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+			return modulePath
+		}
+	}
+
+	return ""
+}
+
 // NewConfig creates a new Config with defaults
 func NewConfig() *Config {
 	return &Config{
@@ -135,6 +189,27 @@ func NewConfig() *Config {
 		IncludeEmptyTypes:   false,
 		NamespaceSeparator:  "/",
 	}
+}
+
+// NewConfigWithDefaults creates a new Config with smart defaults based on the current environment.
+// It auto-detects the Go module path and sets packages to current directory.
+func NewConfigWithDefaults() *Config {
+	cfg := NewConfig()
+
+	// Set current directory as ConfigDir
+	if cwd, err := os.Getwd(); err == nil {
+		cfg.ConfigDir = cwd
+	}
+
+	// Auto-detect module path from go.mod
+	if modulePath := DetectGoModulePath(); modulePath != "" {
+		cfg.ModelPath = modulePath
+	}
+
+	// Set packages to current directory
+	cfg.Packages = []string{"./"}
+
+	return cfg
 }
 
 // Normalize ensures config values are valid

@@ -1,4 +1,4 @@
-package version
+package generator
 
 import (
 	"runtime/debug"
@@ -12,7 +12,7 @@ var Version = ""
 // 2. Module version from build info (for library imports via go get/install)
 // 3. VCS revision from build info (git commit)
 // 4. Default fallback version
-func Get() string {
+func GetVersion() string {
 	// If version was set via ldflags, use it (CLI binary)
 	if Version != "" {
 		return Version

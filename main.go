@@ -29,8 +29,6 @@ import (
 	"strings"
 
 	"github.com/pablor21/gqlschemagen/generator"
-	"github.com/pablor21/gqlschemagen/version"
-	"gopkg.in/yaml.v3"
 )
 
 //go:embed gqlschemagen.yml
@@ -49,7 +47,7 @@ func main() {
 	case "generate":
 		generateCommand(os.Args[2:])
 	case "version", "--version", "-v":
-		fmt.Printf("gqlschemagen %s\n", version.Get())
+		fmt.Printf("gqlschemagen %s\n", generator.GetVersion())
 		os.Exit(0)
 	case "--help", "-h", "help":
 		printUsage()
@@ -118,7 +116,7 @@ func initCommand(args []string) {
 
 	// Replace the hardcoded version with the current version
 	configContent := string(configData)
-	configContent = strings.Replace(configContent, `tool_version: "0.1.11"`, `tool_version: "`+version.Get()+`"`, 1)
+	configContent = strings.Replace(configContent, `tool_version: "0.1.11"`, `tool_version: "`+generator.GetVersion()+`"`, 1)
 
 	// Write to output file
 	if err := os.WriteFile(*output, []byte(configContent), 0644); err != nil {
@@ -214,23 +212,28 @@ func generateCommand(args []string) {
 	}
 
 	// Initialize config
-	cfg := generator.NewConfig()
+	var cfg *generator.Config
 
 	// Load config from YAML file if it exists
 	if *configFile != "" {
 		if _, err := os.Stat(*configFile); err == nil {
-			data, err := os.ReadFile(*configFile)
+			cfg, err = generator.LoadConfigFromFile(*configFile)
 			if err != nil {
-				log.Fatalf("failed to read config file %s: %v", *configFile, err)
-			}
-			if err := yaml.Unmarshal(data, cfg); err != nil {
-				log.Fatalf("failed to parse config file %s: %v", *configFile, err)
+				log.Fatalf("failed to load config file: %v", err)
 			}
 			fmt.Printf("Loaded config from %s\n", *configFile)
 		} else if *configFile != "gqlschemagen.yml" {
 			// Only error if a non-default config file was specified but not found
 			log.Fatalf("config file not found: %s", *configFile)
+		} else {
+			// Initialize with smart defaults if default file doesn't exist
+			cfg = generator.NewConfigWithDefaults()
+			fmt.Println("No config file found, using smart defaults")
 		}
+	} else {
+		// Initialize with smart defaults if no config file specified
+		cfg = generator.NewConfigWithDefaults()
+		fmt.Println("No config file specified, using smart defaults")
 	}
 
 	// Override config with CLI flags (only if they were explicitly set)
