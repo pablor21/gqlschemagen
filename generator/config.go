@@ -118,10 +118,33 @@ type Config struct {
 	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphqls")
 	NamespaceSeparator string `yaml:"namespace_separator"`
 
+	// CLI watcher configuration
+	CLI CLIConfig `yaml:"cli"`
+
 	// ConfigDir is the directory where the config file was loaded from.
 	// This is used to resolve relative paths in the config.
 	// Not marshaled to/from YAML.
 	ConfigDir string `yaml:"-"`
+}
+
+// CLIConfig contains CLI-specific configuration
+type CLIConfig struct {
+	Watcher WatcherConfig `yaml:"watcher"`
+}
+
+// WatcherConfig contains file watcher configuration
+type WatcherConfig struct {
+	// Enable watch mode
+	Enabled bool `yaml:"enabled"`
+
+	// Debounce delay in milliseconds (default: 500)
+	DebounceMs int `yaml:"debounce_ms"`
+
+	// Additional paths to watch (beyond packages)
+	AdditionalPaths []string `yaml:"additional_paths"`
+
+	// Paths/patterns to ignore
+	IgnorePatterns []string `yaml:"ignore_patterns"`
 }
 
 // DetectGoModulePath searches for go.mod in current directory and parent directories,
@@ -188,6 +211,14 @@ func NewConfig() *Config {
 		OutputFileExtension: ".graphqls",
 		IncludeEmptyTypes:   false,
 		NamespaceSeparator:  "/",
+		CLI: CLIConfig{
+			Watcher: WatcherConfig{
+				Enabled:         false,
+				DebounceMs:      500,
+				AdditionalPaths: []string{},
+				IgnorePatterns:  []string{"vendor", "node_modules", ".git"},
+			},
+		},
 	}
 }
 
@@ -209,10 +240,12 @@ func NewConfigWithDefaults() *Config {
 	// Set packages to current directory
 	cfg.Packages = []string{"./"}
 
-	return cfg
-}
+	// Initialize watcher defaults
+	cfg.CLI.Watcher.DebounceMs = 500
+	cfg.CLI.Watcher.IgnorePatterns = []string{"vendor", "node_modules", ".git"}
 
-// Normalize ensures config values are valid
+	return cfg
+} // Normalize ensures config values are valid
 func (c *Config) Normalize() {
 	if c.GenStrategy == "" {
 		c.GenStrategy = GenStrategyMultiple
