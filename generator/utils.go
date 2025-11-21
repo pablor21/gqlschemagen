@@ -191,3 +191,28 @@ func PkgDir(in string) string {
 	// fallback - treat as local path
 	return in
 }
+
+// ExprToGoType extracts the Go type name from an ast.Expr
+// This returns the type as it appears in Go code (e.g., "outofscope.AnotherOutOfScope", "*User", "[]string")
+func ExprToGoType(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return "*" + ExprToGoType(t.X)
+	case *ast.ArrayType:
+		return "[]" + ExprToGoType(t.Elt)
+	case *ast.SelectorExpr:
+		// For package-qualified types like "outofscope.AnotherOutOfScope"
+		if pkg, ok := t.X.(*ast.Ident); ok {
+			return pkg.Name + "." + t.Sel.Name
+		}
+		return t.Sel.Name
+	case *ast.MapType:
+		return "map[" + ExprToGoType(t.Key) + "]" + ExprToGoType(t.Value)
+	case *ast.InterfaceType:
+		return "interface{}"
+	default:
+		return "unknown"
+	}
+}

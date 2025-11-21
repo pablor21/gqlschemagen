@@ -39,6 +39,7 @@ type Parser struct {
 	Structs      map[string]*ast.StructType
 	PackageNames map[string]string
 	PackagePaths map[string]string // Full import path for each type
+	SourceFiles  map[string]string // Source file path for each type (absolute OS path)
 	TypeToDecl   map[string]*ast.GenDecl
 	// ordered list of type names for deterministic output
 	TypeNames []string
@@ -52,20 +53,24 @@ type Parser struct {
 	// Namespace support - maps type/enum name to namespace
 	TypeNamespaces map[string]string // type name -> namespace
 	EnumNamespaces map[string]string // enum name -> namespace
+	// Source files for enums
+	EnumSourceFiles map[string]string // enum name -> source file path
 }
 
 func NewParser() *Parser {
 	return &Parser{
-		StructTypes:    make(map[string]*ast.TypeSpec),
-		Structs:        make(map[string]*ast.StructType),
-		PackageNames:   make(map[string]string),
-		PackagePaths:   make(map[string]string),
-		TypeToDecl:     make(map[string]*ast.GenDecl),
-		EnumTypes:      make(map[string]*EnumType),
-		enumCandidates: make(map[string]*enumCandidate),
-		constBlocks:    make([]*constBlockInfo, 0),
-		TypeNamespaces: make(map[string]string),
-		EnumNamespaces: make(map[string]string),
+		StructTypes:     make(map[string]*ast.TypeSpec),
+		Structs:         make(map[string]*ast.StructType),
+		PackageNames:    make(map[string]string),
+		PackagePaths:    make(map[string]string),
+		SourceFiles:     make(map[string]string),
+		TypeToDecl:      make(map[string]*ast.GenDecl),
+		EnumTypes:       make(map[string]*EnumType),
+		enumCandidates:  make(map[string]*enumCandidate),
+		constBlocks:     make([]*constBlockInfo, 0),
+		TypeNamespaces:  make(map[string]string),
+		EnumNamespaces:  make(map[string]string),
+		EnumSourceFiles: make(map[string]string),
 	}
 }
 
@@ -148,6 +153,7 @@ func (p *Parser) parseFile(path string) error {
 					p.Structs[name] = s
 					p.PackageNames[name] = pkgName
 					p.PackagePaths[name] = path
+					p.SourceFiles[name] = path // Store source file path
 					p.TypeToDecl[name] = genDecl
 					p.TypeNames = appendIfMissing(p.TypeNames, name)
 
@@ -551,6 +557,7 @@ func (p *Parser) parseConstBlock(constBlock *constBlockInfo, enumCandidates map[
 		p.EnumNames = appendIfMissing(p.EnumNames, enumTypeName)
 		p.PackageNames[enumTypeName] = candidate.PkgName
 		p.PackagePaths[enumTypeName] = candidate.FilePath
+		p.EnumSourceFiles[enumTypeName] = candidate.FilePath // Store source file path
 
 		// Store namespace: enum-level override takes precedence over file-level
 		if enumNamespace != "" {
