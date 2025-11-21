@@ -19,7 +19,7 @@ To support this, the generator includes a built-in mechanism to **preserve hand-
 
 You can wrap any part of a generated schema with special markers:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
   {`# @GqlKeepBegin
 # Any custom schema content you want to preserve
 directive @auth(role: String!) on FIELD_DEFINITION
@@ -96,7 +96,7 @@ On the next regeneration, the `profileUrl` field is preserved.
 
 ## Example: Adding a Custom Directive
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
 {`# @GqlKeepBegin
 directive @auth(role: String!) on FIELD_DEFINITION | OBJECT
 # @GqlKeepEnd
