@@ -36,18 +36,19 @@ type InputDefinition struct {
 
 // StructDirectives holds parsed values from surrounding comments for a type
 type StructDirectives struct {
-	GQLName           string            // Default struct name
-	Types             []TypeDefinition  // All @gqlType annotations
-	Inputs            []InputDefinition // All @gqlInput annotations
-	IgnoreAll         bool              // @gqlIgnoreAll
-	UseModelDirective bool              // @gqlUseModelDirective
-	SkipType          bool              // @gqlskip
-	GenInput          bool              // Generate input type
-	HasTypeDirective  bool              // Has @gqlType directive
-	HasInputDirective bool              // Has @gqlInput directive
-	Partial           bool              // @partial
-	TypeExtraFields   []ExtraField      // @gqlTypeExtraField (repeatable)
-	InputExtraFields  []ExtraField      // @gqlInputExtraField (repeatable)
+	GQLName             string            // Default struct name
+	Types               []TypeDefinition  // All @gqlType annotations
+	Inputs              []InputDefinition // All @gqlInput annotations
+	IgnoreAll           bool              // @gqlIgnoreAll
+	UseModelDirective   bool              // @gqlUseModelDirective
+	SkipType            bool              // @gqlskip
+	GenInput            bool              // Generate input type
+	HasTypeDirective    bool              // Has @gqlType directive
+	HasInputDirective   bool              // Has @gqlInput directive
+	HasIncludeDirective bool              // Has @gqlInclude directive
+	Partial             bool              // @partial
+	TypeExtraFields     []ExtraField      // @gqlTypeExtraField (repeatable)
+	InputExtraFields    []ExtraField      // @gqlInputExtraField (repeatable)
 }
 
 // ParseDirectives collects directives from GenDecl.Doc, TypeSpec.Doc and TypeSpec.Comment
@@ -105,6 +106,11 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 						typeDef.Namespace = namespace
 					}
 					res.Types = append(res.Types, typeDef)
+				}
+
+				// @gqlInclude or @GqlInclude - marks type as included without explicit type/input directives
+				if hasDirectivePrefix(line, "Include") || hasDirectiveName(line, "Include") {
+					res.HasIncludeDirective = true
 				}
 
 				// @gqlInput(name:"InputName",description:"desc",ignoreAll:true,namespace:"api/v1")

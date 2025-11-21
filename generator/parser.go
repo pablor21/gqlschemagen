@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // EnumValue represents a single value in an enum
@@ -59,15 +61,21 @@ type Parser struct {
 	// Scanned types registry - tracks all types we've scanned with their GQL annotations
 	// Key: Go type name, Value: metadata about the scanned type
 	ScannedTypes map[string]*ScannedTypeInfo
+	// Package cache for import path resolution
+	pkgCache map[string]*packages.Package // dir path -> package info
+	// External types loaded on-demand (not from scanned packages)
+	ExternalTypes map[string]bool // type name -> true if loaded on-demand from external package
 }
 
 // ScannedTypeInfo stores metadata about a scanned type
 type ScannedTypeInfo struct {
-	TypeName          string   // Go type name
-	HasTypeDirective  bool     // Has @gqlType annotation
-	HasInputDirective bool     // Has @gqlInput annotation
-	GeneratedTypes    []string // List of GraphQL type names generated from this struct (from @gqlType)
-	GeneratedInputs   []string // List of GraphQL input names generated from this struct (from @gqlInput)
+	TypeName            string   // Go type name
+	HasTypeDirective    bool     // Has @gqlType annotation
+	HasInputDirective   bool     // Has @gqlInput annotation
+	HasIncludeDirective bool     // Has @gqlInclude annotation
+	IsExternal          bool     // Loaded on-demand from external package (not in scanned packages)
+	GeneratedTypes      []string // List of GraphQL type names generated from this struct (from @gqlType)
+	GeneratedInputs     []string // List of GraphQL input names generated from this struct (from @gqlInput)
 }
 
 func NewParser() *Parser {
@@ -85,6 +93,8 @@ func NewParser() *Parser {
 		EnumSourceFiles: make(map[string]string),
 		TypeParameters:  make(map[string][]string),
 		ScannedTypes:    make(map[string]*ScannedTypeInfo),
+		pkgCache:        make(map[string]*packages.Package),
+		ExternalTypes:   make(map[string]bool),
 	}
 }
 
@@ -143,6 +153,9 @@ func (p *Parser) parseFile(path string) error {
 	}
 	pkgName := f.Name.Name
 
+	// Get the package import path for this file
+	pkgImportPath := p.GetPackageImportPathFromFile(path, pkgName, "")
+
 	// Extract file-level namespace from comments after package declaration
 	fileNamespace := extractFileNamespace(f)
 
@@ -165,8 +178,8 @@ func (p *Parser) parseFile(path string) error {
 					name := t.Name.Name
 					p.StructTypes[name] = t
 					p.PackageNames[name] = pkgName
-					p.PackagePaths[name] = path
-					p.SourceFiles[name] = path // Store source file path
+					p.PackagePaths[name] = pkgImportPath // Store import path, not file path
+					p.SourceFiles[name] = path           // Store source file path
 					p.TypeToDecl[name] = genDecl
 					p.TypeNames = appendIfMissing(p.TypeNames, name)
 
@@ -196,12 +209,13 @@ func (p *Parser) parseFile(path string) error {
 					if baseType == "string" || baseType == "int" {
 						// Store enum candidate for later matching
 						p.enumCandidates[t.Name.Name] = &enumCandidate{
-							TypeSpec:  t,
-							GenDecl:   genDecl,
-							BaseType:  baseType,
-							PkgName:   pkgName,
-							FilePath:  path,
-							Namespace: fileNamespace,
+							TypeSpec:   t,
+							GenDecl:    genDecl,
+							BaseType:   baseType,
+							PkgName:    pkgName,
+							FilePath:   path,
+							ImportPath: pkgImportPath, // Store import path too
+							Namespace:  fileNamespace,
 						}
 					}
 				}
@@ -229,12 +243,13 @@ func (p *Parser) parseFile(path string) error {
 
 // enumCandidate holds info about a potential enum type before we find its const values
 type enumCandidate struct {
-	TypeSpec  *ast.TypeSpec
-	GenDecl   *ast.GenDecl
-	BaseType  string // "string" or "int"
-	PkgName   string
-	FilePath  string
-	Namespace string // File-level namespace
+	TypeSpec   *ast.TypeSpec
+	GenDecl    *ast.GenDecl
+	BaseType   string // "string" or "int"
+	PkgName    string
+	FilePath   string
+	ImportPath string // Package import path
+	Namespace  string // File-level namespace
 }
 
 // constBlockInfo holds info about a const block for later matching to enum types
@@ -319,141 +334,101 @@ func findNamespaceInComments(cg *ast.CommentGroup) string {
 	return ""
 }
 
-// GetPackageImportPath returns the full import path for a type
-// If modelPath is provided and looks like a complete path, use it directly
-// Otherwise, try to build the path by analyzing the file structure
+// GetPackageImportPath returns the full import path for a type using go/packages
 func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string {
 	pkgName := p.PackageNames[typeName]
 
-	if modelPath == "" {
-		// Just return package name if no model path configured
+	pkgPath, ok := p.PackagePaths[typeName]
+	if !ok {
+		// No package path info, use modelPath if provided (for local types only), otherwise package name
+		if modelPath != "" && !p.ExternalTypes[typeName] {
+			return modelPath
+		}
 		return pkgName
 	}
 
-	filePath, ok := p.PackagePaths[typeName]
-	if !ok {
-		// No file path info, just use modelPath directly
+	// If modelPath is provided and this is NOT an external type, use it instead of the detected package path
+	// External types (loaded on-demand with @GqlInclude) should always use their real import path
+	if modelPath != "" && !p.ExternalTypes[typeName] {
 		return modelPath
 	}
 
-	// Get the directory of the file
-	dir := filepath.ToSlash(filepath.Dir(filePath))
-	parts := strings.Split(dir, "/")
+	// If we have the package path, return it directly
+	if pkgPath != "" {
+		return pkgPath
+	}
 
-	// Find the index where the package name appears
-	pkgIndex := -1
-	for i := len(parts) - 1; i >= 0; i-- {
-		if parts[i] == pkgName {
-			pkgIndex = i
-			break
+	// Fallback: try to load from source file
+	filePath, hasFile := p.SourceFiles[typeName]
+	if !hasFile {
+		if modelPath != "" {
+			return modelPath
+		}
+		return pkgName
+	}
+
+	// Get the directory containing the file
+	dir := filepath.Dir(filePath)
+
+	// Check cache first
+	if pkg, cached := p.pkgCache[dir]; cached {
+		if pkg != nil && pkg.PkgPath != "" {
+			return pkg.PkgPath
 		}
 	}
 
-	if pkgIndex == -1 {
-		// Package directory not found in path, use modelPath as-is
-		return modelPath
-	} // Check if there are meaningful parent directories between module root and package
-	// Look for structure like: internal/models, pkg/entities, api/v2/models, etc.
-	var subPath []string
-	stopAtNext := false
-
-	// Collect directories from package backward until we hit a likely module boundary
-	for i := pkgIndex; i >= 0; i-- {
-		part := parts[i]
-
-		// Skip empty parts
-		if part == "" || part == "." || part == ".." {
-			continue
-		}
-
-		// If we should stop after this iteration
-		if stopAtNext {
-			break
-		}
-
-		subPath = append([]string{part}, subPath...)
-
-		// Stop if we hit common module structure markers (but include them in the path)
-		if part == "internal" || part == "pkg" || part == "cmd" || part == "api" {
-			break
-		}
-
-		// Also check if parent is a common test/development directory name - these typically are at module root
-		if i > 0 {
-			parentPart := parts[i-1]
-			// If parent is "dev", "test", "examples", etc., stop after including current part
-			if parentPart == "dev" || parentPart == "test" || parentPart == "examples" || parentPart == "demo" {
-				stopAtNext = true
-			}
-		}
+	// Load package info using go/packages
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedModule,
+		Dir:  dir,
 	}
 
-	// Otherwise, append the sub-path to modelPath
-	if len(subPath) > 0 {
-		return modelPath + "/" + strings.Join(subPath, "/")
+	pkgs, err := packages.Load(cfg, ".")
+	if err != nil || len(pkgs) == 0 || pkgs[0].PkgPath == "" {
+		// Fallback to modelPath if package loading fails, or package name if no modelPath
+		p.pkgCache[dir] = nil // cache the failure
+		if modelPath != "" {
+			return modelPath
+		}
+		return pkgName
 	}
 
-	return modelPath
+	pkg := pkgs[0]
+	p.pkgCache[dir] = pkg
+	return pkg.PkgPath
 }
 
-// GetPackageImportPathFromFile builds the import path from a file path and package name
+// GetPackageImportPathFromFile builds the import path from a file path using go/packages
 func (p *Parser) GetPackageImportPathFromFile(filePath string, pkgName string, modelPath string) string {
-	if modelPath == "" {
-		// Just return package name if no model path configured
+	// Get the directory containing the file
+	dir := filepath.Dir(filePath)
+
+	// Check cache first
+	if pkg, cached := p.pkgCache[dir]; cached {
+		if pkg != nil && pkg.PkgPath != "" {
+			return pkg.PkgPath
+		}
+	}
+
+	// Load package info using go/packages
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedModule,
+		Dir:  dir,
+	}
+
+	pkgs, err := packages.Load(cfg, ".")
+	if err != nil || len(pkgs) == 0 || pkgs[0].PkgPath == "" {
+		// Fallback to modelPath if package loading fails, or package name if no modelPath
+		p.pkgCache[dir] = nil // cache the failure
+		if modelPath != "" {
+			return modelPath
+		}
 		return pkgName
 	}
 
-	// Get the directory of the file
-	dir := filepath.ToSlash(filepath.Dir(filePath))
-	parts := strings.Split(dir, "/")
-
-	// Find the index where the package name appears
-	pkgIndex := -1
-	for i := len(parts) - 1; i >= 0; i-- {
-		if parts[i] == pkgName {
-			pkgIndex = i
-			break
-		}
-	}
-
-	if pkgIndex == -1 {
-		// Package directory not found in path, use modelPath as-is
-		return modelPath
-	}
-
-	// Check if there are meaningful parent directories between module root and package
-	// Look for structure like: internal/models, pkg/entities, api/v2/models, etc.
-	var subPath []string
-
-	// Collect directories from package backward until we hit a likely module boundary
-	for i := pkgIndex; i >= 0; i-- {
-		part := parts[i]
-
-		// Skip empty parts
-		if part == "" || part == "." || part == ".." {
-			continue
-		}
-
-		subPath = append([]string{part}, subPath...)
-
-		// Stop if we hit common module structure markers (but include them)
-		if part == "internal" || part == "pkg" || part == "cmd" || part == "api" {
-			break
-		}
-	}
-
-	// If we only have the package name itself, return modelPath as-is
-	// This handles cases where modelPath already points to the complete package location
-	if len(subPath) == 1 && subPath[0] == pkgName {
-		return modelPath
-	}
-
-	// Otherwise, append the sub-path to modelPath
-	if len(subPath) > 0 {
-		return modelPath + "/" + strings.Join(subPath, "/")
-	}
-
-	return modelPath
+	pkg := pkgs[0]
+	p.pkgCache[dir] = pkg
+	return pkg.PkgPath
 }
 
 // hasGqlEnumDirective checks if a GenDecl has @gqlEnum or @GqlEnum directive in its doc comments
@@ -589,7 +564,7 @@ func (p *Parser) parseConstBlock(constBlock *constBlockInfo, enumCandidates map[
 		p.EnumTypes[enumTypeName] = enumType
 		p.EnumNames = appendIfMissing(p.EnumNames, enumTypeName)
 		p.PackageNames[enumTypeName] = candidate.PkgName
-		p.PackagePaths[enumTypeName] = candidate.FilePath
+		p.PackagePaths[enumTypeName] = candidate.ImportPath  // Use import path instead of file path
 		p.EnumSourceFiles[enumTypeName] = candidate.FilePath // Store source file path
 
 		// Store namespace: enum-level override takes precedence over file-level
@@ -761,4 +736,260 @@ func parseEnumDirective(commentGroup *ast.CommentGroup, defaultName string) (str
 	}
 
 	return name, description, namespace
+}
+
+// HasGQLAnnotations checks if a Go type (from field expression) has @gqlType or @gqlInput annotations
+// This loads and parses the type on-demand if it's not already scanned
+// parentTypeName is the name of the type that contains the field (used to find the source file for import resolution)
+func (p *Parser) HasGQLAnnotations(fieldExpr ast.Expr, parentTypeName string) bool {
+	// Extract package selector and type name from the field expression
+	var pkgPath string
+	var typeIdent *ast.Ident
+
+	// Unwrap pointers, arrays, slices
+	expr := fieldExpr
+	for {
+		switch t := expr.(type) {
+		case *ast.StarExpr:
+			expr = t.X
+		case *ast.ArrayType:
+			expr = t.Elt
+		case *ast.SelectorExpr:
+			// pkg.TypeName
+			if ident, ok := t.X.(*ast.Ident); ok {
+				// Get the package path from the source file of the parent type
+				if parentFilePath, exists := p.SourceFiles[parentTypeName]; exists {
+					// Parse the file to get imports
+					fset := token.NewFileSet()
+					f, err := parser.ParseFile(fset, parentFilePath, nil, parser.ParseComments)
+					if err == nil {
+						pkgAlias := ident.Name
+						// Find the import path for this package alias
+						for _, imp := range f.Imports {
+							impPath := strings.Trim(imp.Path.Value, `"`)
+							impName := filepath.Base(impPath)
+							if imp.Name != nil {
+								impName = imp.Name.Name
+							}
+							if impName == pkgAlias {
+								pkgPath = impPath
+								break
+							}
+						}
+					}
+				}
+				typeIdent = t.Sel
+			}
+			goto done
+		case *ast.Ident:
+			// Just TypeName (same package)
+			typeIdent = t
+			goto done
+		case *ast.IndexExpr, *ast.IndexListExpr:
+			// Generic instantiation - extract base type
+			if idx, ok := t.(*ast.IndexExpr); ok {
+				expr = idx.X
+			} else if idxList, ok := t.(*ast.IndexListExpr); ok {
+				expr = idxList.X
+			}
+		default:
+			return false
+		}
+	}
+done:
+
+	if typeIdent == nil {
+		return false
+	}
+
+	typeName := typeIdent.Name
+
+	// If no package path (same package or already scanned), check ScannedTypes
+	if pkgPath == "" {
+		if info, exists := p.ScannedTypes[typeName]; exists {
+			return info.HasTypeDirective || info.HasInputDirective
+		}
+		return false
+	}
+
+	// Check if we already know about this type
+	qualifiedName := pkgPath + "." + typeName
+	if info, exists := p.ScannedTypes[qualifiedName]; exists {
+		return info.HasTypeDirective || info.HasInputDirective
+	}
+	if info, exists := p.ScannedTypes[typeName]; exists {
+		return info.HasTypeDirective || info.HasInputDirective
+	}
+
+	// Load the package on-demand to check for annotations
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes,
+	}
+
+	pkgs, err := packages.Load(cfg, pkgPath)
+	if err != nil || len(pkgs) == 0 {
+		return false
+	}
+
+	pkg := pkgs[0]
+
+	// When loading a package on-demand, add ALL struct types from it to the parser
+	// This ensures that non-annotated types (like Connection[T]) are available for embedded field expansion
+	var foundRequestedType bool
+	var requestedTypeHasAnnotations bool
+
+	for _, file := range pkg.Syntax {
+		// First pass: process type declarations
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+
+			for _, spec := range genDecl.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+
+				currentTypeName := typeSpec.Name.Name
+
+				// Check if this is a struct type or an enum type
+				_, isStruct := typeSpec.Type.(*ast.StructType)
+				isEnum := hasGqlEnumDirective(genDecl)
+
+				if !isStruct && !isEnum {
+					continue
+				}
+
+				// Handle enum types
+				if isEnum {
+					baseType := getBaseTypeName(typeSpec.Type)
+					if baseType == "string" || baseType == "int" {
+						// Add to enum candidates
+						p.enumCandidates[currentTypeName] = &enumCandidate{
+							TypeSpec:   typeSpec,
+							GenDecl:    genDecl,
+							BaseType:   baseType,
+							PkgName:    pkg.Name,
+							FilePath:   pkg.Fset.File(file.Pos()).Name(),
+							ImportPath: pkg.PkgPath,
+							Namespace:  "", // Could extract from file-level directives if needed
+						}
+
+						// Track if this is the requested type
+						if currentTypeName == typeName {
+							foundRequestedType = true
+							requestedTypeHasAnnotations = true
+						}
+					}
+					continue
+				}
+
+				// Parse directives for struct types
+				directives := ParseDirectives(typeSpec, genDecl)
+
+				// Add to StructTypes (always, even if not annotated - needed for embedded expansion)
+				p.StructTypes[currentTypeName] = typeSpec
+				p.TypeToDecl[currentTypeName] = genDecl
+				p.PackageNames[currentTypeName] = pkg.Name
+				p.PackagePaths[currentTypeName] = pkg.PkgPath
+
+				// Find source file
+				for _, f := range pkg.Syntax {
+					for _, d := range f.Decls {
+						if gd, ok := d.(*ast.GenDecl); ok && gd == genDecl {
+							p.SourceFiles[currentTypeName] = pkg.Fset.File(f.Pos()).Name()
+							break
+						}
+					}
+				}
+
+				// Store type parameters if it's a generic type
+				if typeSpec.TypeParams != nil && typeSpec.TypeParams.NumFields() > 0 {
+					params := make([]string, 0, typeSpec.TypeParams.NumFields())
+					for _, field := range typeSpec.TypeParams.List {
+						for _, name := range field.Names {
+							params = append(params, name.Name)
+						}
+					}
+					p.TypeParameters[currentTypeName] = params
+				}
+
+				// If this type has annotations, add to TypeNames (for generation) and ScannedTypes
+				if directives.HasTypeDirective || directives.HasInputDirective || directives.HasIncludeDirective {
+					// Add to TypeNames for generation (if not already there)
+					found := false
+					for _, name := range p.TypeNames {
+						if name == currentTypeName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						p.TypeNames = append(p.TypeNames, currentTypeName)
+					}
+
+					// Mark as external type (loaded on-demand from external package)
+					p.ExternalTypes[currentTypeName] = true
+
+					// Cache in ScannedTypes
+					info := &ScannedTypeInfo{
+						TypeName:            currentTypeName,
+						HasTypeDirective:    directives.HasTypeDirective,
+						HasInputDirective:   directives.HasInputDirective,
+						HasIncludeDirective: directives.HasIncludeDirective,
+						IsExternal:          true, // This type was loaded on-demand
+						GeneratedTypes:      make([]string, 0),
+						GeneratedInputs:     make([]string, 0),
+					}
+
+					for _, typeDef := range directives.Types {
+						if typeDef.Name != "" {
+							info.GeneratedTypes = append(info.GeneratedTypes, typeDef.Name)
+						} else {
+							info.GeneratedTypes = append(info.GeneratedTypes, currentTypeName)
+						}
+					}
+
+					for _, inputDef := range directives.Inputs {
+						if inputDef.Name != "" {
+							info.GeneratedInputs = append(info.GeneratedInputs, inputDef.Name)
+						} else {
+							info.GeneratedInputs = append(info.GeneratedInputs, currentTypeName+"Input")
+						}
+					}
+
+					p.ScannedTypes[currentTypeName] = info
+				}
+
+				// Track if this is the requested type and if it has annotations
+				if currentTypeName == typeName {
+					foundRequestedType = true
+					requestedTypeHasAnnotations = directives.HasTypeDirective || directives.HasInputDirective || directives.HasIncludeDirective
+				}
+			}
+		}
+
+		// Second pass: collect const blocks for enum matching
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.CONST {
+				continue
+			}
+
+			// Store const block info for later matching
+			constBlock := &constBlockInfo{
+				GenDecl:  genDecl,
+				FilePath: pkg.Fset.File(file.Pos()).Name(),
+				PkgName:  pkg.Name,
+			}
+			p.constBlocks = append(p.constBlocks, constBlock)
+
+			// Immediately match with enum candidates (in case this is called during generation)
+			p.parseConstBlock(constBlock, p.enumCandidates)
+		}
+	}
+
+	return foundRequestedType && requestedTypeHasAnnotations
 }
