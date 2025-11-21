@@ -60,6 +60,7 @@ use_json_tag: true
 use_gqlgen_directives: false
 
 # Base path for @goModel directive (leave empty to use actual package path)
+# This is only used in the scanned packages, external packages always use their real import path.
 # Example: "github.com/user/project/models"
 # Default: "" (empty - auto-detected from go.mod)
 model_path: ""

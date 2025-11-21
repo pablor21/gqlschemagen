@@ -56,7 +56,9 @@ type Config struct {
 	UseGqlGenDirectives bool `yaml:"use_gqlgen_directives"`
 
 	// Base path for @goModel directive (e.g., "github.com/user/project/models")
-	// If empty, uses the actual package path
+	// When provided, this overrides the automatically detected package import paths
+	// in @goModel directives. Useful for generating schemas for a different module path
+	// than where the source code currently resides.
 	ModelPath string `yaml:"model_path"`
 
 	// StripPrefix is a comma-separated list of prefixes to strip from type names

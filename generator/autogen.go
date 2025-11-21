@@ -43,7 +43,7 @@ func NewDependencyGraph() *DependencyGraph {
 }
 
 // AddNode adds a type to the graph
-func (g *DependencyGraph) AddNode(typeName, packagePath string, isAnnotated, hasTypeDir, hasInputDir bool) {
+func (g *DependencyGraph) AddNode(typeName, packagePath string, isAnnotated, hasTypeDir, hasInputDir, hasIncludeDir bool) {
 	if _, exists := g.Nodes[typeName]; !exists {
 		g.Nodes[typeName] = &TypeNode{
 			Name:              typeName,
@@ -51,9 +51,9 @@ func (g *DependencyGraph) AddNode(typeName, packagePath string, isAnnotated, has
 			IsAnnotated:       isAnnotated,
 			HasTypeDirective:  hasTypeDir,
 			HasInputDirective: hasInputDir,
-			ShouldGenType:     hasTypeDir,  // Explicit @gqlType means generate as type
-			ShouldGenInput:    hasInputDir, // Explicit @gqlInput means generate as input
-			Depth:             -1,          // Will be set during traversal
+			ShouldGenType:     hasTypeDir || hasIncludeDir,  // @gqlType or @GqlInclude
+			ShouldGenInput:    hasInputDir || hasIncludeDir, // @gqlInput or @GqlInclude
+			Depth:             -1,                           // Will be set during traversal
 			References:        []string{},
 			ReferencedBy:      []string{},
 		}
@@ -68,10 +68,10 @@ func (g *DependencyGraph) AddEdge(fromType, toType string) {
 
 	// Ensure nodes exist
 	if _, exists := g.Nodes[fromType]; !exists {
-		g.AddNode(fromType, "", false, false, false)
+		g.AddNode(fromType, "", false, false, false, false)
 	}
 	if _, exists := g.Nodes[toType]; !exists {
-		g.AddNode(toType, "", false, false, false)
+		g.AddNode(toType, "", false, false, false, false)
 	}
 
 	// Add edge if not already present
@@ -93,9 +93,9 @@ func (g *Generator) BuildDependencyGraph() *DependencyGraph {
 
 		// Parse directives to check if annotated
 		directives := ParseDirectives(typeSpec, genDecl)
-		isAnnotated := directives.HasTypeDirective || directives.HasInputDirective
+		isAnnotated := directives.HasTypeDirective || directives.HasInputDirective || directives.HasIncludeDirective
 
-		graph.AddNode(typeName, packagePath, isAnnotated, directives.HasTypeDirective, directives.HasInputDirective)
+		graph.AddNode(typeName, packagePath, isAnnotated, directives.HasTypeDirective, directives.HasInputDirective, directives.HasIncludeDirective)
 	}
 
 	// Add enums as annotated nodes (enums are always types, never inputs)
@@ -105,7 +105,7 @@ func (g *Generator) BuildDependencyGraph() *DependencyGraph {
 		if len(enumType.Values) > 0 {
 			packagePath = enumType.Values[0].PackagePath
 		}
-		graph.AddNode(enumName, packagePath, true, true, false)
+		graph.AddNode(enumName, packagePath, true, true, false, false)
 	}
 
 	// Second pass: Build edges by analyzing struct fields
@@ -115,11 +115,22 @@ func (g *Generator) BuildDependencyGraph() *DependencyGraph {
 			continue
 		}
 		for _, field := range structType.Fields.List {
-			// Extract referenced type names from field type
-			referencedTypes := g.extractTypeReferences(field.Type)
-			for _, refType := range referencedTypes {
-				if refType != "" && refType != typeName {
-					graph.AddEdge(typeName, refType)
+			// For embedded fields, only extract nested references, not the embedded type itself
+			// Embedded types don't need to be generated separately - their fields are inlined
+			if field.Names == nil { // Embedded field
+				embeddedRefs := g.extractEmbeddedTypeReferences(field.Type)
+				for _, refType := range embeddedRefs {
+					if refType != "" && refType != typeName {
+						graph.AddEdge(typeName, refType)
+					}
+				}
+			} else {
+				// For named fields, extract the field type (which SHOULD be generated)
+				referencedTypes := g.extractTypeReferences(field.Type)
+				for _, refType := range referencedTypes {
+					if refType != "" && refType != typeName {
+						graph.AddEdge(typeName, refType)
+					}
 				}
 			}
 		}
@@ -185,6 +196,112 @@ func (g *Generator) extractTypeReferences(expr ast.Expr) []string {
 		for _, index := range t.Indices {
 			argTypes := g.extractTypeReferences(index)
 			types = append(types, argTypes...)
+		}
+	}
+
+	return types
+}
+
+// extractEmbeddedTypeReferences recursively extracts type references from an embedded type's fields
+// This is needed to catch dependencies in generic types like Connection[T] which embeds Edge[T] and references PageInfo
+func (g *Generator) extractEmbeddedTypeReferences(expr ast.Expr) []string {
+	var types []string
+
+	// First, extract type arguments from generic embedded types (e.g., Connection[Comment])
+	// These type arguments should be generated as types themselves
+	switch t := expr.(type) {
+	case *ast.IndexExpr:
+		// Connection[T] or pkg.Connection[T]
+		argTypes := g.extractTypeReferences(t.Index)
+		types = append(types, argTypes...)
+	case *ast.IndexListExpr:
+		// Map[K, V] or pkg.Map[K, V]
+		for _, index := range t.Indices {
+			argTypes := g.extractTypeReferences(index)
+			types = append(types, argTypes...)
+		}
+	case *ast.StarExpr:
+		// *Connection[T] or *pkg.Connection[T]
+		if idx, ok := t.X.(*ast.IndexExpr); ok {
+			argTypes := g.extractTypeReferences(idx.Index)
+			types = append(types, argTypes...)
+		} else if idxList, ok := t.X.(*ast.IndexListExpr); ok {
+			for _, index := range idxList.Indices {
+				argTypes := g.extractTypeReferences(index)
+				types = append(types, argTypes...)
+			}
+		}
+	}
+
+	// Then get the base type name from the expression
+	var embeddedTypeName string
+
+	switch t := expr.(type) {
+	case *ast.Ident:
+		embeddedTypeName = t.Name
+	case *ast.StarExpr:
+		// Handle pointer to embedded type
+		if ident, ok := t.X.(*ast.Ident); ok {
+			embeddedTypeName = ident.Name
+		} else if idx, ok := t.X.(*ast.IndexExpr); ok {
+			// *Connection[T] - extract base name
+			if baseIdent, ok := idx.X.(*ast.Ident); ok {
+				embeddedTypeName = baseIdent.Name
+			}
+		} else if idxList, ok := t.X.(*ast.IndexListExpr); ok {
+			// *Map[K,V] - extract base name
+			if baseIdent, ok := idxList.X.(*ast.Ident); ok {
+				embeddedTypeName = baseIdent.Name
+			}
+		} else if sel, ok := t.X.(*ast.SelectorExpr); ok {
+			// *pkg.Type - extract selector name
+			embeddedTypeName = sel.Sel.Name
+		}
+	case *ast.IndexExpr:
+		// Connection[T] - extract base name
+		if baseIdent, ok := t.X.(*ast.Ident); ok {
+			embeddedTypeName = baseIdent.Name
+		} else if sel, ok := t.X.(*ast.SelectorExpr); ok {
+			// pkg.Connection[T]
+			embeddedTypeName = sel.Sel.Name
+		}
+	case *ast.IndexListExpr:
+		// Map[K,V] - extract base name
+		if baseIdent, ok := t.X.(*ast.Ident); ok {
+			embeddedTypeName = baseIdent.Name
+		} else if sel, ok := t.X.(*ast.SelectorExpr); ok {
+			// pkg.Map[K,V]
+			embeddedTypeName = sel.Sel.Name
+		}
+	case *ast.SelectorExpr:
+		// pkg.Type
+		embeddedTypeName = t.Sel.Name
+	}
+
+	if embeddedTypeName == "" {
+		return types
+	}
+
+	// Look up the embedded type
+	typeSpec, exists := g.P.StructTypes[embeddedTypeName]
+	if !exists {
+		return types
+	}
+
+	structType, ok := typeSpec.Type.(*ast.StructType)
+	if !ok || structType.Fields == nil {
+		return types
+	}
+
+	// Extract references from all fields of the embedded type
+	for _, field := range structType.Fields.List {
+		fieldRefs := g.extractTypeReferences(field.Type)
+		types = append(types, fieldRefs...)
+
+		// Recursively handle nested embedded fields
+		if field.Names == nil {
+			nestedRefs := g.extractEmbeddedTypeReferences(field.Type)
+			types = append(types, nestedRefs...)
 		}
 	}
 
@@ -459,12 +576,14 @@ func (g *Generator) applyAutoGeneration(graph *DependencyGraph) {
 			continue
 		}
 
-		// Auto-generate as type if marked and not explicitly annotated
+		// Auto-generate as type if needed and not explicitly annotated with @gqlType
+		// Types with @GqlInclude are eligible for auto-generation
 		if node.ShouldGenType && !directives.HasTypeDirective {
 			g.AutoGeneratedTypes[typeName] = true
 		}
 
-		// Auto-generate as input if marked and not explicitly annotated
+		// Auto-generate as input if needed and not explicitly annotated with @gqlInput
+		// Types with @GqlInclude are eligible for auto-generation
 		if node.ShouldGenInput && !directives.HasInputDirective {
 			g.AutoGeneratedInputs[typeName] = true
 		}
