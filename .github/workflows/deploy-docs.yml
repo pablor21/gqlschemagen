@@ -66,6 +66,7 @@ jobs:
         run: pnpm run build
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.setup_pages.outputs.base_path }}
+          PAGES_ORIGIN: ${{ steps.setup_pages.outputs.origin }}
           PAGES_BASE_URL: ${{ steps.setup_pages.outputs.base_url }}
           PAGES_BASE_PATH: ${{ steps.setup_pages.outputs.base_path }}
 
