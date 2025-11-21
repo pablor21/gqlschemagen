@@ -142,12 +142,12 @@ This will produce a `schema.graphql` file with your types. For example, the `Use
 
 <CodeBlock language="graphql" filename="schemagraphqls">
   {`"""
-Represents a user in the system
-"""
-type UserProfile @goModel(model: "your-package.User") {
-  id: ID!
-  name: String!
-}`}
+  Represents a user in the system
+  """
+  type UserProfile @goModel(model: "your-package.User") {
+    id: ID!
+    name: String!
+  }`}
 </CodeBlock>
 
 > **Tip:** Use `gqlschemagen generate --watch` during development to automatically regenerate the schema whenever you change your types.
