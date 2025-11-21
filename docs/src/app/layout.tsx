@@ -48,7 +48,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     siteName: "GQLSchemaGen",
   },
-  metadataBase: new URL("https://pablor21.github.io/gqlschemagen"),
+  metadataBase: new URL(
+    process.env.PAGES_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`
+  ),
 };
 
 export default function RootLayout({

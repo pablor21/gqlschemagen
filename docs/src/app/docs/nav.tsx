@@ -14,6 +14,7 @@ import React, { ReactNode, useState } from "react";
 
 import { Github } from "lucide-react";
 import NavbarBrand from "@/components/layout/navbar-brand";
+import NextLink from "next/link";
 import { usePathname } from "next/navigation";
 
 const docsNavItems = [
@@ -35,7 +36,10 @@ const docsNavItems = [
   },
   {
     label: "Integrations",
-    items: [{ label: "GQLGen", href: "/docs/integrations/gqlgen" }],
+    items: [
+      { label: "GQLGen", href: "/docs/integrations/gqlgen" },
+      { label: "VSCode", href: "/docs/integrations/vscode" },
+    ],
   },
   { label: "CLI Reference", href: "/docs/cli-reference" },
 ];
@@ -56,6 +60,7 @@ const SidebarLink = ({
 
   return (
     <Link
+      as={NextLink}
       href={href}
       data-active={isActive}
       className={[
@@ -141,13 +146,23 @@ export default function DocsNavbar() {
 
       <NavbarContent className="hidden sm:flex gap-4" justify="center">
         <NavbarItem data-active={isDocsActive}>
-          <Link href="/docs" color="foreground" className="text-sm">
+          <Link
+            as={NextLink}
+            href="/docs"
+            color="foreground"
+            className="text-sm"
+          >
             Documentation
           </Link>
         </NavbarItem>
 
         <NavbarItem data-active={isExamplesActive}>
-          <Link href="/examples" color="foreground" className="text-sm">
+          <Link
+            as={NextLink}
+            href="/examples"
+            color="foreground"
+            className="text-sm"
+          >
             Examples
           </Link>
         </NavbarItem>
@@ -182,7 +197,12 @@ export default function DocsNavbar() {
                     data-active={pathname === item.href}
                     className="pl-0"
                   >
-                    <Link href={item.href} size="lg" color="foreground">
+                    <Link
+                      as={NextLink}
+                      href={item.href}
+                      size="lg"
+                      color="foreground"
+                    >
                       {item.label}
                     </Link>
                   </NavbarMenuItem>
@@ -195,7 +215,7 @@ export default function DocsNavbar() {
                         data-active={pathname === sub.href}
                         className="pl-4"
                       >
-                        <Link href={sub.href} color="foreground">
+                        <Link as={NextLink} href={sub.href} color="foreground">
                           {sub.label}
                         </Link>
                       </NavbarMenuItem>
@@ -207,7 +227,7 @@ export default function DocsNavbar() {
           </div>
 
           <NavbarMenuItem data-active={isExamplesActive}>
-            <Link href="/examples" size="lg" color="foreground">
+            <Link as={NextLink} href="/examples" size="lg" color="foreground">
               Examples
             </Link>
           </NavbarMenuItem>

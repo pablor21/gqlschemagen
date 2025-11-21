@@ -38,7 +38,7 @@ UserRoleViewer UserRole = "viewer" // @GqlEnumValue(name:"VIEWER", description:"
 
 Generates:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
 {`"""
 User role in the system
 """
@@ -85,7 +85,7 @@ PermissionAdmin // @GqlEnumValue(name:"ADMIN", description:"Full administrative 
 
 Generates:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
 {`"""
 Permission level for resources
 """
@@ -145,7 +145,7 @@ StatusInactive Status = "inactive"
 
 Generates:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
   {`enum Status {
     ACTIVE
     INACTIVE
@@ -174,7 +174,7 @@ OrderStatusRejected OrderStatus = "rejected" // @GqlEnumValue(name:"REJECTED")
 
 Generates:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
   {`enum OrderStatus {
     PENDING
     CANCELLED @deprecated(reason: "Use REJECTED instead")

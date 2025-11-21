@@ -1,0 +1,100 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "VS Code Integration",
+  description:
+    "Use GQLSchemaGen inside Visual Studio Code with the official VS Code extension for seamless schema generation.",
+};
+
+# VS Code Integration (gqlschemagen-vscode)
+
+The **GQLSchemaGen VS Code extension** makes working with your GraphQL schema even smoother by integrating schema generation directly into your editor. You don’t need to run CLI commands manually — you can trigger generation, inspect errors, and even see preserved schema blocks right from VS Code.
+
+---
+
+## 📦 Installation
+
+1. Open VS Code.
+2. Go to **Extensions** (left sidebar) or press `Ctrl+Shift+X` (Cmd on Mac).
+3. Search for **“gqlschemagen”** or browse for the extension ID: `pablor21.gqlschemagen-vscode`.
+4. Click **Install**.
+5. Reload VS Code if prompted.
+
+Alternatively, you can install it via the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=pablor21.gqlschemagen-vscode).
+
+---
+
+## 🚀 Usage
+
+Once installed, you’ll have a few new ways to run schema generation directly from within VS Code:
+
+- Use the **Command Palette** (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run `GQLSchemaGen: Generate Schema`.
+- If you have a `gqlschemagen.yml` config file, the extension will pick it up by default.
+- You can also run with a specific configuration file by passing its path.
+
+When you run generation, the extension:
+
+- Runs `gqlschemagen generate` behind the scenes
+- Captures any errors or warnings and shows them inside the **Problems** panel
+- Overwrites the schema files while preserving your `@GqlKeepBegin / @GqlKeepEnd` blocks (if configured)
+
+---
+
+## ⚙️ Recommended Workflow
+
+Here’s a sample workflow combining the extension with CLI and `go:generate`:
+
+```go
+// graph/generate.go
+//go:generate go run github.com/pablor21/gqlschemagen generate
+//go:generate go run github.com/99designs/gqlgen generate
+```
+
+Then, in VS Code:
+
+- Run `GQLSchemaGen: Generate Schema` whenever you've changed your Go models
+- Use `go generate ./...` in your terminal (or via a task) to run both schema and resolver generation in one step
+
+---
+
+## ✅ What Makes the Extension Useful
+
+- No context switch: **run schema generation without leaving the editor**
+- Immediate feedback: errors show in **Problems**, inline
+- Preservation: keeps your custom schema modifications intact
+- Config-aware: uses `gqlschemagen.yml` if present
+
+<Alert
+  title="Tip"
+  description="Make sure your `gqlschemagen.yml` is saved before running the command — the extension reads it directly."
+  color="info"
+/>
+
+---
+
+## 🔧 Troubleshooting & Tips
+
+- **Config file not picked up?**
+  The extension looks for `gqlschemagen.yml` in your workspace root by default. If you use a different location, use a custom path in the command or workspace settings.
+
+- **Generation fails?**
+  Check the **Output** and **Problems** view — CLI errors are surfaced there just like from the terminal.
+
+- **Keep-blocks overwritten?**
+  Ensure your markers (`@GqlKeepBegin` / `@GqlKeepEnd`) match the ones configured in your YAML (by default `# @GqlKeepBegin` / `# @GqlKeepEnd`) so the extension can detect and preserve them properly.
+
+---
+
+## 💡 Why Use the Extension
+
+- Streamlines schema updates as your Go code evolves
+- Saves time by eliminating the need to switch back and forth between editor and terminal
+- Encourages schema-first thinking, while keeping the schema auto-generated and DRY
+
+Make sure to keep your extension updated via the VS Code marketplace to get the latest improvements and bug fixes.
+
+---
+
+That’s it for VS Code integration. Once you're set up, generating your schema from within the editor becomes a seamless part of your development workflow.
+
+<NextButton href="/docs/cli-reference">CLI Reference</NextButton>

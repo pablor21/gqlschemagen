@@ -17,9 +17,11 @@ import {
 
 import { BorderBeam } from "@/components/ui/border-beam";
 import { CodeBlock } from "@/components/ui/code-block";
-// Ensure you have this component or remove the import if not using it
 import NavbarBrand from "@/components/layout/navbar-brand";
+import NextLink from "next/link";
 import { useState } from "react";
+
+// Ensure you have this component or remove the import if not using it
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -65,13 +67,23 @@ export default function Home() {
 
         <NavbarContent className="hidden sm:flex gap-4" justify="center">
           <NavbarItem>
-            <Link href="/docs" color="foreground" className="text-sm">
+            <Link
+              as={NextLink}
+              href="/docs"
+              color="foreground"
+              className="text-sm"
+            >
               Documentation
             </Link>
           </NavbarItem>
 
           <NavbarItem>
-            <Link href="/examples" color="foreground" className="text-sm">
+            <Link
+              as={NextLink}
+              href="/examples"
+              color="foreground"
+              className="text-sm"
+            >
               Examples
             </Link>
           </NavbarItem>
@@ -84,6 +96,7 @@ export default function Home() {
               href="[https://github.com/pablor21/gqlschemagen](https://github.com/pablor21/gqlschemagen)"
               variant="ghost"
               startContent={<Github size={18} />}
+              isExternal
             >
               GitHub
             </Button>
@@ -92,12 +105,12 @@ export default function Home() {
 
         <NavbarMenu>
           <NavbarMenuItem>
-            <Link href="/docs" size="lg" color="foreground">
+            <Link as={NextLink} href="/docs" size="lg" color="foreground">
               Documentation
             </Link>
           </NavbarMenuItem>
           <NavbarMenuItem>
-            <Link href="/examples" size="lg" color="foreground">
+            <Link as={NextLink} href="/examples" size="lg" color="foreground">
               Examples
             </Link>
           </NavbarMenuItem>
@@ -303,7 +316,7 @@ type User struct {
                 workflow.
               </p>
               <Button
-                as={Link}
+                as={NextLink}
                 href="/docs"
                 color="primary"
                 size="lg"

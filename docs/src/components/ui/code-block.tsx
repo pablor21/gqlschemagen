@@ -6,8 +6,81 @@ import { Skeleton, cn } from "@heroui/react";
 import {
   transformerNotationDiff,
   transformerNotationFocus,
+  transformerNotationHighlight,
 } from "@shikijs/transformers";
 import { useEffect, useState } from "react";
+
+interface CodeHighlightProps {
+  children: string;
+  language: BundledLanguage;
+  theme?: BundledTheme;
+  className?: string;
+}
+
+export const CodeHighlight = ({
+  children,
+  language,
+  theme = "github-dark",
+  className,
+}: CodeHighlightProps) => {
+  const [html, setHtml] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        setIsLoading(true);
+
+        const { codeToHtml } = await import("shiki");
+
+        const rendered = await codeToHtml(children, {
+          lang: language,
+          theme,
+          transformers: [
+            transformerNotationHighlight({ matchAlgorithm: "v3" }),
+            transformerNotationDiff({ matchAlgorithm: "v3" }),
+            transformerNotationFocus({ matchAlgorithm: "v3" }),
+          ],
+        });
+
+        if (!cancelled) {
+          setHtml(rendered);
+          setIsLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setHtml(`<pre class="shiki ${theme}"><code>${children}</code></pre>`);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [children, language, theme]);
+
+  if (isLoading)
+    return (
+      <div className="p-4 space-y-3">
+        <Skeleton className="h-4 w-1/3 rounded" />
+        <Skeleton className="h-4 w-3/4 rounded" />
+        <Skeleton className="h-4 w-1/2 rounded" />
+        <Skeleton className="h-4 w-2/3 rounded" />
+      </div>
+    );
+
+  return (
+    <div
+      className={className}
+      dangerouslySetInnerHTML={{ __html: html }}
+      style={{ backgroundColor: "transparent" }}
+    />
+  );
+};
 
 interface CodeBlockProps {
   children: string;
@@ -28,55 +101,19 @@ export const CodeBlock = ({
   label,
   hideCopyButton = false,
 }: CodeBlockProps) => {
-  const [highlightedCode, setHighlightedCode] = useState("");
   const [isCopied, setIsCopied] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   const handleCopy = async () => {
-    if (children) {
-      try {
-        await navigator.clipboard.writeText(children);
-        setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-      }
+    if (!children) return;
+
+    try {
+      await navigator.clipboard.writeText(children);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
     }
   };
-
-  useEffect(() => {
-    const highlight = async () => {
-      try {
-        setIsLoading(true);
-        const { codeToHtml } = await import("shiki");
-        const { transformerNotationHighlight } = await import(
-          "@shikijs/transformers"
-        );
-
-        const html = await codeToHtml(children, {
-          lang: language,
-          theme: theme,
-          transformers: [
-            transformerNotationHighlight({ matchAlgorithm: "v3" }),
-            transformerNotationDiff({ matchAlgorithm: "v3" }),
-            transformerNotationFocus({ matchAlgorithm: "v3" }),
-          ],
-        });
-
-        setHighlightedCode(html);
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Highlighter failed to load:", error);
-        setHighlightedCode(
-          `<pre class="shiki ${theme}"><code>${children}</code></pre>`
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    highlight();
-  }, [children, language, theme]);
 
   return (
     <div
@@ -86,8 +123,7 @@ export const CodeBlock = ({
         className
       )}
     >
-      {/* Header / Title Bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/70 backdrop-blur-sm h-12">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/70 h-12">
         <div className="flex items-center gap-2 text-sm text-zinc-400">
           <FileIcon className="w-4 h-4 text-blue-400" />
           <span className="font-medium font-mono">{filename}</span>
@@ -99,8 +135,7 @@ export const CodeBlock = ({
         {!hideCopyButton && (
           <button
             onClick={handleCopy}
-            className="p-1.5 rounded-md hover:bg-zinc-800 transition-all text-zinc-500 hover:text-zinc-200 focus:outline-none"
-            title="Copy code"
+            className="p-1.5 rounded-md hover:bg-zinc-800 transition-all text-zinc-500 hover:text-zinc-200"
           >
             {isCopied ? (
               <Check className="w-4 h-4 text-green-400" />
@@ -111,27 +146,12 @@ export const CodeBlock = ({
         )}
       </div>
 
-      {/* Code Content */}
       <div className="relative overflow-x-auto">
-        {isLoading ? (
-          <div className="p-4 space-y-3">
-            <div className="p-4 space-y-3">
-              <Skeleton className="h-4 w-1/3 rounded" />
-              <Skeleton className="h-4 w-3/4 rounded" />
-              <Skeleton className="h-4 w-1/2 rounded" />
-              <Skeleton className="h-4 w-2/3 rounded" />
-            </div>
-          </div>
-        ) : (
-          <div
-            className="text-sm font-mono leading-relaxed overflow-auto min-h-[100px]"
-            dangerouslySetInnerHTML={{ __html: highlightedCode }}
-            style={{ backgroundColor: "transparent" }}
-          />
-        )}
+        <CodeHighlight language={language} theme={theme}>
+          {children}
+        </CodeHighlight>
       </div>
 
-      {/* Optional: "Magic" Glow effect */}
       <div className="absolute -inset-1 bg-linear-to-r from-blue-500/20 to-purple-500/20 blur-3xl -z-10 opacity-20" />
     </div>
   );
@@ -166,7 +186,6 @@ export function CodeComparison({
           {/* Left Side (Before) */}
           <div className="relative">
             <CodeBlock
-              children={beforeCode}
               // Cast language for CodeBlock props
               language={language as BundledLanguage}
               filename={filename}
@@ -175,13 +194,14 @@ export function CodeComparison({
               // Override the default CodeBlock styles to fit the grid
               className="rounded-none border-none shadow-none bg-transparent"
               hideCopyButton
-            />
+            >
+              {beforeCode}
+            </CodeBlock>
           </div>
 
           {/* Right Side (After) */}
           <div className="relative">
             <CodeBlock
-              children={afterCode}
               // Cast language for CodeBlock props
               language={language as BundledLanguage}
               filename={filename}
@@ -189,7 +209,9 @@ export function CodeComparison({
               label="after"
               // Override the default CodeBlock styles to fit the grid
               className="rounded-none border-none shadow-none bg-transparent"
-            />
+            >
+              {afterCode}
+            </CodeBlock>
           </div>
         </div>
 

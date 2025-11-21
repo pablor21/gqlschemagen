@@ -1,3 +1,3 @@
 "use client";
 
-export { Snippet, Alert } from "@heroui/react";
+export { Snippet, Alert, Link } from "@heroui/react";

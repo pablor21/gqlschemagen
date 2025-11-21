@@ -10,23 +10,98 @@ export const metadata = {
 
 GQLSchemaGen makes it easy to generate a GraphQL schema from your Go models. This guide walks you through installation, setup, and your first generated type.
 
+---
+
 ## Installation
 
-You can install GQLSchemaGen in your project using either of these methods:
+You can install GQLSchemaGen globally or pin it directly to your project using Go’s toolchain-aware installation. The latter is preferable when you want fully reproducible builds.
 
-### Option 1: Install via `go install`
+### Option 1: Global installation with `go install`
 
 <Snippet>
   go install github.com/pablor21/gqlschemagen/cmd/gqlschemagen@latest
 </Snippet>
 
-This will install the tool as a binary in your `$GOPATH/bin` or `$GOBIN`.
+This installs a global `gqlschemagen` binary into `$GOBIN` (or `$GOPATH/bin`).
 
-### Option 2: Add as a project dependency
+### Option 2: Install as a versioned tool (recommended)
+
+Go supports installing CLI tools _inside your module_ using the `-tool` flag.
+This keeps the tool versioned and isolated, without polluting global binaries.
+
+Install it:
+
+<Snippet>
+  go get -tool github.com/pablor21/gqlschemagen/cmd/gqlschemagen
+</Snippet>
+
+Use it:
+
+<Snippet>go tool gqlschemagen generate</Snippet>
+
+This ensures you always run the module-pinned version of GQLSchemaGen—ideal for teams and CI environments.
+
+> **Tip:** Combine this with `//go:generate` to guarantee consistent schema generation across machines.
+
+### Option 3: Install as a library (for building a custom wrapper)
+
+If you prefer full control over the generation workflow, you can install GQLSchemaGen purely as a library:
 
 <Snippet>go get github.com/pablor21/gqlschemagen</Snippet>
 
-> **Note:** If you installed with `go get`, you can run the tool using `go tool gqlschemagen` instead of a global binary.
+This allows you to build your own wrapper command or orchestrate multiple tools together. It’s useful when you want:
+
+- custom logging or output formatting
+- additional pre- or post-processing steps
+- a single unified codegen entrypoint for your project
+
+Here is an example of a **custom `go:generate` script** that chains GQLSchemaGen and GQLGen together.
+Save this file as `generate.go` (or any name you want):
+
+<CodeBlock language="go" filename="graph/generate.go">
+{`//go:build ignore
+  // +build ignore
+
+package main
+
+import (
+"fmt"
+"os"
+"os/exec"
+)
+
+func main() {
+// Step 1: Generate GraphQL schemas from Go structs
+fmt.Println("Generating GraphQL schemas from Go structs...")
+cmd := exec.Command("gqlschemagen", "generate")
+cmd.Stdout = os.Stdout
+cmd.Stderr = os.Stderr
+if err := cmd.Run(); err != nil {
+fmt.Fprintf(os.Stderr, "Failed to generate schemas: %v\\n", err)
+os.Exit(1)
+}
+
+      // Step 2: Run gqlgen to generate resolvers
+      fmt.Println("Generating gqlgen code...")
+      cmd = exec.Command("go", "run", "github.com/99designs/gqlgen", "generate")
+      cmd.Stdout = os.Stdout
+      cmd.Stderr = os.Stderr
+      if err := cmd.Run(); err != nil {
+      fmt.Fprintf(os.Stderr, "Failed to generate gqlgen code: %v\\n", err)
+      os.Exit(1)
+    }
+
+    fmt.Println("\\n✓ Code generation complete!")
+
+}`}
+
+</CodeBlock>
+
+Run it with:
+
+<Snippet>go generate ./...</Snippet>
+
+This pattern keeps your project self-contained, version-controlled, and flexible. It also avoids depending on globally installed binaries, since your wrapper decides how and where to execute each tool.
 
 ---
 
@@ -66,14 +141,14 @@ Once your structs are annotated, generate the GraphQL schema:
 
 This will produce a `schema.graphql` file with your types. For example, the `User` struct above generates:
 
-<CodeBlock language="graphql" filename="schemagraphqls">
+<CodeBlock language="graphql" filename="schema.graphqls">
   {`"""
-Represents a user in the system
-"""
-type UserProfile @goModel(model: "your-package.User") {
-  id: ID!
-  name: String!
-}`}
+  Represents a user in the system
+  """
+  type UserProfile @goModel(model: "your-package.User") {
+    id: ID!
+    name: String!
+  }`}
 </CodeBlock>
 
 > **Tip:** Use `gqlschemagen generate --watch` during development to automatically regenerate the schema whenever you change your types.
