@@ -52,8 +52,9 @@ output_file_extension: .graphqls
 field_case: camel
 
 # Use json struct tags for field names when gql tag is not present
+# This will follow the ignore rules of the json package (e.g., json:"-" to ignore fields)
 # Default: true
-use_json_tag: true
+use_json_tag: true 
 
 # Generate gqlgen directives (@goModel, @goField, @goTag)
 # Default: false

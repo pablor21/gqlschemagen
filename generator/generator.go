@@ -1866,6 +1866,21 @@ func (g *Generator) generateConcreteTypesFromInstantiations() error {
 	slog.Info("Generating concrete types from instantiations", "count", len(g.GenericInstantiations))
 
 	for concreteTypeName, inst := range g.GenericInstantiations {
+		// Skip if this type was already generated (e.g., explicitly annotated struct)
+		alreadyGenerated := false
+		for _, item := range g.GeneratedItems {
+			if item.GQLName == concreteTypeName {
+				slog.Debug("Skipping concrete type generation - already generated",
+					"concreteType", concreteTypeName,
+					"existingType", item.GoTypeName)
+				alreadyGenerated = true
+				break
+			}
+		}
+		if alreadyGenerated {
+			continue
+		}
+
 		slog.Debug("Processing concrete type",
 			"concreteTypeName", concreteTypeName,
 			"genericType", inst.GenericTypeName)
