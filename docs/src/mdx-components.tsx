@@ -1,6 +1,6 @@
 import { Alert, Link, Snippet } from "./components";
+import { CodeBlock, CodeHighlight } from "@/components/ui/code-block";
 
-import { CodeBlock } from "@/components/ui/code-block";
 import type { MDXComponents } from "mdx/types";
 import NextLink from "next/link";
 import { cn } from "@heroui/react";
@@ -31,16 +31,31 @@ export function useMDXComponents(): MDXComponents {
     CodeBlock: ({ className, ...props }) => (
       <CodeBlock className={cn("not-prose my-2", className)} {...props} />
     ),
-    pre: ({ children }) => (
-      <pre className="bg-content1 text-zinc-100 p-4 rounded-lg border border-content2 overflow-x-auto text-sm leading-relaxed my-5">
-        <code className="block font-mono">{children}</code>
-      </pre>
-    ),
+    pre: ({ children }) => {
+      const codeEl = children.props;
+
+      // codeEl.className → "language-ts", "language-yaml", etc.
+      const lang =
+        codeEl.className
+          ?.split(" ")
+          ?.find((c: string) => c.startsWith("language-"))
+          ?.replace("language-", "") ?? "txt";
+
+      const code = codeEl.children ?? "";
+
+      return <CodeHighlight language={lang}>{code}</CodeHighlight>;
+    },
+    code: (props) => <code className="font-mono wrap-break-word" {...props} />,
     a: ({ href, ...props }) =>
       href.startsWith("/") ? (
         <NextLink href={href} {...props} />
       ) : (
         <Link href={href} isExternal {...props} />
       ),
+    table: (props) => (
+      <div className="w-full overflow-x-auto">
+        <table className="w-full table-auto" {...props} />
+      </div>
+    ),
   };
 }
