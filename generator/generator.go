@@ -1102,7 +1102,7 @@ func (g *Generator) resolveFileName(d StructDirectives, typeName string) string 
 func (g *Generator) writeGoModelDirective(buf *strings.Builder, goTypeName string, useDirective bool) {
 	if g.Config.UseGqlGenDirectives || useDirective {
 		pkgPath := g.P.GetPackageImportPath(goTypeName, g.Config.ModelPath)
-		buf.WriteString(fmt.Sprintf(" @goModel(model: \"%s.%s\")", pkgPath, goTypeName))
+		fmt.Fprintf(buf, " @goModel(model: \"%s.%s\")", pkgPath, goTypeName)
 	}
 }
 
@@ -1121,7 +1121,7 @@ func (g *Generator) writeDeprecatedDirective(buf *strings.Builder, deprecated bo
 	if reason != "" {
 		// Escape quotes in the reason
 		escapedReason := strings.ReplaceAll(reason, `"`, `\"`)
-		buf.WriteString(fmt.Sprintf(` @deprecated(reason: "%s")`, escapedReason))
+		fmt.Fprintf(buf, ` @deprecated(reason: "%s")`, escapedReason)
 	} else {
 		buf.WriteString(" @deprecated")
 	}
@@ -1130,7 +1130,7 @@ func (g *Generator) writeDeprecatedDirective(buf *strings.Builder, deprecated bo
 // writeGoEnumDirective writes the @goEnum directive if enabled
 func (g *Generator) writeGoEnumDirective(buf *strings.Builder, valuePkgPath string, valueGoName string) {
 	if g.Config.UseGqlGenDirectives {
-		buf.WriteString(fmt.Sprintf(" @goEnum(value: \"%s.%s\")", valuePkgPath, valueGoName))
+		fmt.Fprintf(buf, " @goEnum(value: \"%s.%s\")", valuePkgPath, valueGoName)
 	}
 }
 
