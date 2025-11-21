@@ -1,4 +1,11 @@
-import { Alert, Link, Snippet } from "./components";
+import {
+  Accordion,
+  AccordionItem,
+  Alert,
+  Collapsible,
+  Link,
+  Snippet,
+} from "./components";
 import { CodeBlock, CodeHighlight } from "@/components/ui/code-block";
 
 import type { MDXComponents } from "mdx/types";
@@ -7,6 +14,9 @@ import { cn } from "@heroui/react";
 
 export function useMDXComponents(): MDXComponents {
   return {
+    Accordion,
+    AccordionItem,
+    Collapsible,
     Snippet: ({ className, classNames, ...props }) => (
       <Snippet
         classNames={{
