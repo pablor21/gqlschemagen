@@ -36,7 +36,10 @@ const docsNavItems = [
   },
   {
     label: "Integrations",
-    items: [{ label: "GQLGen", href: "/docs/integrations/gqlgen" }],
+    items: [
+      { label: "GQLGen", href: "/docs/integrations/gqlgen" },
+      { label: "VSCode", href: "/docs/integrations/vscode" },
+    ],
   },
   { label: "CLI Reference", href: "/docs/cli-reference" },
 ];
