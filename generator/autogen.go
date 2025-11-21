@@ -93,9 +93,21 @@ func (g *Generator) BuildDependencyGraph() *DependencyGraph {
 
 		// Parse directives to check if annotated
 		directives := ParseDirectives(typeSpec, genDecl)
-		isAnnotated := directives.HasTypeDirective || directives.HasInputDirective || directives.HasIncludeDirective
 
-		graph.AddNode(typeName, packagePath, isAnnotated, directives.HasTypeDirective, directives.HasInputDirective, directives.HasIncludeDirective)
+		// Check if this is a type alias to a generic instantiation (IndexExpr or IndexListExpr)
+		// These should be automatically considered annotated for both type and input generation
+		isGenericAlias := false
+		if _, ok := typeSpec.Type.(*ast.IndexListExpr); ok {
+			isGenericAlias = true
+		} else if _, ok := typeSpec.Type.(*ast.IndexExpr); ok {
+			isGenericAlias = true
+		}
+
+		isAnnotated := directives.HasTypeDirective || directives.HasInputDirective || directives.HasIncludeDirective || isGenericAlias
+		hasType := directives.HasTypeDirective || isGenericAlias
+		hasInput := directives.HasInputDirective || isGenericAlias
+
+		graph.AddNode(typeName, packagePath, isAnnotated, hasType, hasInput, directives.HasIncludeDirective)
 	}
 
 	// Add enums as annotated nodes (enums are always types, never inputs)
