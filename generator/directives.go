@@ -221,6 +221,32 @@ func ParseDirectives(typeSpec *ast.TypeSpec, genDecl *ast.GenDecl) StructDirecti
 			}
 		}
 	}
+
+	// Check for @gqlskip or @gqlIgnore (prevent auto-generation)
+	for _, cg := range comments {
+		for _, c := range cg.List {
+			text := strings.TrimSpace(c.Text)
+			text = strings.TrimPrefix(text, "//")
+			text = strings.TrimSpace(text)
+			text = strings.TrimPrefix(text, "/*")
+			text = strings.TrimPrefix(text, "/**")
+			text = strings.TrimSuffix(text, "*/")
+			text = strings.TrimSpace(text)
+
+			for _, line := range strings.Split(text, "\n") {
+				line = strings.TrimSpace(line)
+				line = strings.TrimPrefix(line, "*")
+				line = strings.TrimSpace(line)
+
+				// @gqlskip or @gqlIgnore
+				if hasDirectiveName(line, "skip") || hasDirectiveName(line, "Ignore") {
+					res.SkipType = true
+					return res
+				}
+			}
+		}
+	}
+
 	return res
 }
 

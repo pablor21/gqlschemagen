@@ -27,15 +27,19 @@ packages:
    - ./
 
 # Output strategy: "single" for one file, "multiple" for separate files per type, "package" for separate files per package
+# Options: "single", "multiple", "package"
+# Default: "multiple"
 strategy: single
 
-# Output path 
+# Output path (directory or file path depending on strategy)
 output: graph/schema/
 
-# output file name when using single strategy
+# Output file name when using single strategy
+# Default: "gqlschemagen.graphqls"
 output_file_name: gqlschemagen.graphqls
 
-# output file extension for multiple strategy
+# Output file extension for multiple/package strategies
+# Default: ".graphqls"
 output_file_extension: .graphqls
 
 # Field name transformation: camel, snake, pascal, original, none
@@ -44,69 +48,189 @@ output_file_extension: .graphqls
 # - pascal: FirstName -> FirstName
 # - original: Keep as defined in struct
 # - none: Keep struct field name untouched
+# Default: "camel"
 field_case: camel
 
 # Use json struct tags for field names when gql tag is not present
+# Default: true
 use_json_tag: true
 
 # Generate gqlgen directives (@goModel, @goField, @goTag)
+# Default: false
 use_gqlgen_directives: false
 
 # Base path for @goModel directive (leave empty to use actual package path)
 # Example: "github.com/user/project/models"
+# Default: "" (empty - auto-detected from go.mod)
 model_path: ""
 
 # Strip prefixes from type names (e.g., "DB,Pg" converts DBUser -> User)
 # Only applies when @gqlType or @gqlInput doesn't specify a custom name
+# Default: "" (empty)
 strip_prefix: ""
 
 # Strip suffixes from type names (e.g., "DTO,Entity" converts UserDTO -> User)
 # Only applies when @gqlType or @gqlInput doesn't specify a custom name
+# Default: "" (empty)
 strip_suffix: ""
 
 # Add prefix to GraphQL type names (e.g., "Gql" converts User -> GqlUser)
 # Only applies when @gqlType doesn't specify a custom name
+# Default: "" (empty)
 add_type_prefix: ""
 
 # Add suffix to GraphQL type names (e.g., "Type" converts User -> UserType)
 # Only applies when @gqlType doesn't specify a custom name
+# Default: "" (empty)
 add_type_suffix: ""
 
 # Add prefix to GraphQL input names
 # Only applies when @gqlInput doesn't specify a custom name
+# Default: "" (empty)
 add_input_prefix: ""
 
 # Add suffix to GraphQL input names (e.g., "Input" converts CreateUser -> CreateUserInput)
 # Only applies when @gqlInput doesn't specify a custom name
-add_input_suffix: ""
+# Default: "Input"
+add_input_suffix: "Input"
 
 # Schema file name pattern for multiple strategy (supports: {model_name}, {type_name})
 # Example: "{type_name}.graphqls" or "{model_name}_schema.graphqls"
+# Default: "{model_name}.graphqls"
 schema_file_name: "{model_name}.graphqls"
 
 # Include types with no fields in the generated schema
+# Default: false
 include_empty_types: false
 
 # Skip overwriting existing files when generating
+# Default: false
 skip_existing: false
 
 # Automatically generate input types from structs with @gqlType
+# Default: true
 gen_inputs: true
+
+# Generate empty structs (types with no fields)
+# Default: false
+generate_empty_structs: false
+
+# Namespace separator for converting namespace to file paths
+# Example: "/" converts "user.auth" to "user/auth.graphqls"
+# Default: "/"
+namespace_separator: "/"
+
+# Known GraphQL scalar types (built-in + custom)
+# These types are always considered "in scope" and won't trigger out-of-scope warnings
+# You can add your own custom scalars here (e.g., "Money", "Color", "URL")
+# Default: includes GraphQL built-ins (Int, Float, String, Boolean, ID) and common customs
+known_scalars:
+   - Int
+   - Float
+   - String
+   - Boolean
+   - ID
+   - Time
+   - DateTime
+   - Date
+   - Timestamp
+   - Upload
+   - Map
+   - UUID
+   - Any
+   - JSON
+   - Byte
+   - Bytes
+   - Int64
+   - UInt
+   - UInt64
 
 # GQLKeep preserved sections configuration
 # Allows you to preserve custom content between regenerations
 # Add content between @gqlKeepBegin and @gqlKeepEnd markers in your schema
 
 # Placement of the preserved sections (options: "start", "end")
+# Default: "end"
 keep_section_placement: "end"
 
 # Markers to denote beginning and end of preserved sections
+# Default: "# @gqlKeepBegin"
 keep_begin_marker: "# @gqlKeepBegin"
+# Default: "# @gqlKeepEnd"
 keep_end_marker: "# @gqlKeepEnd"
 
+# Auto-generation configuration
+# Automatically generate GraphQL types for structs referenced by annotated types
+auto_generate:
+   # Enable/disable auto-generation
+   # Default: true
+   enabled: true
+   
+   # Strategy for auto-generation:
+   # - "none": Disable auto-generation
+   # - "referenced": Auto-generate types referenced by annotated types (recommended)
+   # - "all": Auto-generate all structs found
+   # - "patterns": Auto-generate types matching patterns list
+   # Default: "referenced"
+   strategy: referenced
+   
+   # Maximum depth for dependency traversal
+   # 0 = unlimited, 1 = direct references only, 2 = direct + transitive
+   # Default: 1
+   max_depth: 1
+   
+   # Patterns for type matching (only used when strategy is "patterns")
+   # Example: ["*/models/*Connection", "*/graph/model/*Input"]
+   # Default: [] (empty)
+   patterns: []
+   
+   # Exclude patterns (applied to all strategies)
+   # Example: ["*/internal/*", "*/vendor/*"]
+   # Default: ["*/vendor/*", "*/*_test.go"]
+   exclude_patterns:
+      - "*/vendor/*"
+      - "*/*_test.go"
+   
+   # Only auto-generate types that are referenced by @gql* annotated types
+   # Default: true
+   only_referenced_by_annotated: true
+   
+   # Auto-generate embedded struct types
+   # Default: true
+   include_embedded: true
+   
+   # Auto-generate field types
+   # Default: true
+   include_field_types: true
+   
+   # Action for out-of-scope types (types referenced but not in scanned packages)
+   # Options: "warn", "fail", "ignore", "exclude"
+   # - "warn": Log warnings about out-of-scope types (default)
+   # - "fail": Stop generation if out-of-scope types are found
+   # - "ignore": Silently allow out-of-scope type references
+   # - "exclude": Automatically exclude fields with out-of-scope types
+   # Default: "warn"
+   out_of_scope_types: warn
+
+# CLI configuration
 cli:
-   whatcher:
-      enabled: false 
-      exclude_paths:
-         - ./vendor/
-      debounce_duration_ms: 500
+   # File watcher configuration
+   watcher:
+      # Enable watch mode
+      # Default: false
+      enabled: false
+      
+      # Debounce delay in milliseconds
+      # Default: 500
+      debounce_ms: 500
+      
+      # Additional paths to watch (beyond packages)
+      # Default: [] (empty)
+      additional_paths: []
+      
+      # Paths/patterns to ignore
+      # Default: ["vendor", "node_modules", ".git"]
+      ignore_patterns:
+         - vendor
+         - node_modules
+         - .git

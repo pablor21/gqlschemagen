@@ -73,6 +73,60 @@ func ExprToGraphQLType(expr ast.Expr) string {
 	}
 }
 
+// ExprToGraphQLTypeForInput converts an ast.Expr to a GraphQL type string for input types
+// It transforms custom type references to input references (e.g., Address -> AddressInput)
+// Built-in types and enums remain unchanged
+func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes map[string]*EnumType) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		switch t.Name {
+		case "string":
+			return "String!"
+		case "int", "int32":
+			return "Int!"
+		case "int64":
+			return "Int64!"
+		case "float32", "float64":
+			return "Float!"
+		case "bool":
+			return "Boolean!"
+		case "interface{}":
+			return "JSON!"
+		case "Time", "time.Time":
+			return "DateTime!"
+		default:
+			// Check if it's an enum first (enums don't need Input suffix)
+			if enumTypes != nil {
+				if _, isEnum := enumTypes[t.Name]; isEnum {
+					return t.Name + "!"
+				}
+			}
+			// Check if it's a known scalar
+			for _, scalar := range knownScalars {
+				if scalar == t.Name {
+					return t.Name + "!"
+				}
+			}
+			// It's a custom type, convert to input
+			return t.Name + "Input!"
+		}
+	case *ast.StarExpr:
+		return ExprToGraphQLTypeForInput(t.X, knownScalars, enumTypes)
+	case *ast.ArrayType:
+		return "[" + ExprToGraphQLTypeForInput(t.Elt, knownScalars, enumTypes) + "]!"
+	case *ast.SelectorExpr:
+		// Check if it's an enum
+		if enumTypes != nil {
+			if _, isEnum := enumTypes[t.Sel.Name]; isEnum {
+				return t.Sel.Name + "!"
+			}
+		}
+		return t.Sel.Name + "Input!"
+	default:
+		return "String!"
+	}
+}
+
 func WriteFile(path, content string, config *Config) error {
 	// Ensure parent dir exists
 	dir := filepath.Dir(path)

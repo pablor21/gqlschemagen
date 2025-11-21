@@ -118,6 +118,13 @@ type Config struct {
 	// Default: "/" (e.g., "user.auth" becomes "user/auth.graphqls")
 	NamespaceSeparator string `yaml:"namespace_separator"`
 
+	// Known GraphQL scalar types (built-in + custom scalars)
+	// These types are always considered "in scope" and won't trigger out-of-scope warnings
+	KnownScalars []string `yaml:"known_scalars"`
+
+	// Auto-generation configuration
+	AutoGenerate AutoGenerateConfig `yaml:"auto_generate"`
+
 	// CLI watcher configuration
 	CLI CLIConfig `yaml:"cli"`
 
@@ -125,6 +132,60 @@ type Config struct {
 	// This is used to resolve relative paths in the config.
 	// Not marshaled to/from YAML.
 	ConfigDir string `yaml:"-"`
+}
+
+// AutoGenerateStrategy defines the strategy for auto-generating types
+type AutoGenerateStrategy string
+
+const (
+	AutoGenNone       AutoGenerateStrategy = "none"       // Only generate annotated types
+	AutoGenReferenced AutoGenerateStrategy = "referenced" // Generate types referenced by annotated types
+	AutoGenAll        AutoGenerateStrategy = "all"        // Generate all types found
+	AutoGenPatterns   AutoGenerateStrategy = "patterns"   // Generate based on patterns only
+)
+
+// OutOfScopeAction defines how to handle types referenced but not in scanned packages
+type OutOfScopeAction string
+
+const (
+	OutOfScopeWarn    OutOfScopeAction = "warn"    // Warn about out-of-scope types (default)
+	OutOfScopeFail    OutOfScopeAction = "fail"    // Fail generation if out-of-scope types found
+	OutOfScopeIgnore  OutOfScopeAction = "ignore"  // Silently ignore out-of-scope types
+	OutOfScopeExclude OutOfScopeAction = "exclude" // Exclude fields with out-of-scope types
+)
+
+// AutoGenerateConfig controls automatic type generation
+type AutoGenerateConfig struct {
+	// Enable auto-generation
+	Enabled bool `yaml:"enabled"`
+
+	// Strategy: "none", "referenced", "all", "patterns"
+	Strategy AutoGenerateStrategy `yaml:"strategy"`
+
+	// Maximum depth for transitive type references (default: 1)
+	// 0 = unlimited, 1 = direct references only, 2 = references of references, etc.
+	MaxDepth int `yaml:"max_depth"`
+
+	// Patterns to include (glob-style patterns matching package/type)
+	// Example: "*/models/*Connection", "*/graph/model/*Input"
+	Patterns []string `yaml:"patterns"`
+
+	// Patterns to exclude (higher priority than include patterns)
+	// Example: "*/internal/*", "*/vendor/*"
+	ExcludePatterns []string `yaml:"exclude_patterns"`
+
+	// Only auto-generate types that are referenced by @gql* annotated types
+	OnlyReferencedByAnnotated bool `yaml:"only_referenced_by_annotated"`
+
+	// Auto-generate embedded struct types
+	IncludeEmbedded bool `yaml:"include_embedded"`
+
+	// Auto-generate field types
+	IncludeFieldTypes bool `yaml:"include_field_types"`
+
+	// Action to take for out-of-scope types (types referenced but not in scanned packages)
+	// Options: "warn" (default), "fail", "ignore", "exclude"
+	OutOfScopeTypes OutOfScopeAction `yaml:"out_of_scope_types"`
 }
 
 // CLIConfig contains CLI-specific configuration
@@ -211,6 +272,25 @@ func NewConfig() *Config {
 		OutputFileExtension: ".graphqls",
 		IncludeEmptyTypes:   false,
 		NamespaceSeparator:  "/",
+		KnownScalars: []string{
+			// GraphQL built-in scalars
+			"Int", "Float", "String", "Boolean", "ID",
+			// Common custom scalars
+			"Time", "DateTime", "Date", "Timestamp",
+			"Upload", "Map", "UUID", "Any", "JSON",
+			"Byte", "Bytes", "Int64", "UInt", "UInt64",
+		},
+		AutoGenerate: AutoGenerateConfig{
+			Enabled:                   true,
+			Strategy:                  AutoGenReferenced,
+			MaxDepth:                  1,
+			Patterns:                  []string{},
+			ExcludePatterns:           []string{"*/vendor/*", "*/*_test.go"},
+			OnlyReferencedByAnnotated: true,
+			IncludeEmbedded:           true,
+			IncludeFieldTypes:         true,
+			OutOfScopeTypes:           OutOfScopeWarn,
+		},
 		CLI: CLIConfig{
 			Watcher: WatcherConfig{
 				Enabled:         false,
@@ -243,6 +323,15 @@ func NewConfigWithDefaults() *Config {
 	// Initialize watcher defaults
 	cfg.CLI.Watcher.DebounceMs = 500
 	cfg.CLI.Watcher.IgnorePatterns = []string{"vendor", "node_modules", ".git"}
+
+	// Initialize auto-generate defaults
+	cfg.AutoGenerate.Enabled = true
+	cfg.AutoGenerate.Strategy = AutoGenReferenced
+	cfg.AutoGenerate.MaxDepth = 1
+	cfg.AutoGenerate.ExcludePatterns = []string{"*/internal/*", "*/vendor/*", "*/*_test.go"}
+	cfg.AutoGenerate.OnlyReferencedByAnnotated = true
+	cfg.AutoGenerate.IncludeEmbedded = true
+	cfg.AutoGenerate.IncludeFieldTypes = true
 
 	return cfg
 } // Normalize ensures config values are valid
