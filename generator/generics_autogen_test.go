@@ -618,18 +618,24 @@ type PostRepositoryResponse struct {
 
 	schema := string(generated)
 
+	// With multi-level generic resolution, nested generics are fully expanded and inlined
+	// Response[*Repository[Post]] resolves as follows:
+	// 1. Expand Response: Data T, Status int, Message string
+	// 2. T resolves to *Repository[Post], which is itself a generic instantiation
+	// 3. Inline Repository[Post] fields instead of having a "data" field
+	// 4. Repository[Post] expands: Items []*T -> Items []*Post, Count int
+	// Result: items, count (from Repository), status, message (from Response), cached (direct)
 	expected := []string{
 		"type PostRepositoryResponse",
-		"data:",
-		"status:",
-		"message:",
-		"cached:",
-		"items:",
-		"count:",
-		"type Post",
+		"items:",    // From Repository[Post].Items after full resolution
+		"count:",    // From Repository[Post].Count
+		"status:",   // From Response[T]
+		"message:",  // From Response[T]
+		"cached:",   // Direct field on PostRepositoryResponse
+		"type Post", // Auto-generated from reference
 		"title:",
 		"author:",
-		"type Author",
+		"type Author", // Auto-generated from Post.Author reference
 		"name:",
 	}
 

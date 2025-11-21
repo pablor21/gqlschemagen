@@ -41,9 +41,26 @@ func FieldTypeName(expr ast.Expr) string {
 }
 
 // ExprToGraphQLType converts an ast.Expr to a GraphQL type string (with ! for required)
+// This is a convenience wrapper that calls ExprToGraphQLTypeWithContext with nil context
 func ExprToGraphQLType(expr ast.Expr) string {
+	return ExprToGraphQLTypeWithContext(expr, nil, nil, nil)
+}
+
+// ExprToGraphQLTypeWithContext converts an ast.Expr to a GraphQL type string with context support
+// The context provides type substitutions for generic type parameters and config for unresolved types
+func ExprToGraphQLTypeWithContext(expr ast.Expr, config *Config, ctx *GenerationContext, gen *Generator) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
+		// FIRST: Check if this identifier has a substitution in context (for generic type parameters)
+		if ctx != nil && ctx.TypeSubstitutions != nil {
+			if substitutedExpr, exists := ctx.TypeSubstitutions[t.Name]; exists {
+				// Recursively convert the substituted expression
+				// This handles Result[*User] where T maps to *User expression
+				return ExprToGraphQLTypeWithContext(substitutedExpr, config, ctx, gen)
+			}
+		}
+
+		// SECOND: Check built-in types
 		switch t.Name {
 		case "string":
 			return "String!"
@@ -60,25 +77,121 @@ func ExprToGraphQLType(expr ast.Expr) string {
 		case "Time", "time.Time":
 			return "DateTime!"
 		default:
+			// THIRD: Check if it's an unresolved type parameter and config specifies replacement
+			if config != nil && config.AutoGenerate.UnresolvedGenericType != "" {
+				// Use simple heuristic for type parameters
+				if isLikelyTypeParameter(t.Name) {
+					return config.AutoGenerate.UnresolvedGenericType + "!"
+				}
+			}
 			return t.Name + "!"
 		}
 	case *ast.StarExpr:
-		return ExprToGraphQLType(t.X)
+		// Pass context through
+		return ExprToGraphQLTypeWithContext(t.X, config, ctx, gen)
 	case *ast.ArrayType:
-		return "[" + ExprToGraphQLType(t.Elt) + "]!"
+		return "[" + ExprToGraphQLTypeWithContext(t.Elt, config, ctx, gen) + "]!"
 	case *ast.SelectorExpr:
 		return t.Sel.Name + "!"
+	case *ast.IndexExpr:
+		// Handle generic instantiation like Repository[Post] or Edge[Comment]
+		// First, resolve the type argument through the context (for nested generics like Edge[T] where T=*Comment)
+		typeArg := t.Index
+		if ctx != nil && ctx.TypeSubstitutions != nil {
+			if ident, ok := typeArg.(*ast.Ident); ok {
+				if substitutedExpr, exists := ctx.TypeSubstitutions[ident.Name]; exists {
+					typeArg = substitutedExpr
+				}
+			}
+		}
+
+		// Track this instantiation and generate a concrete type name
+		baseName := extractBaseTypeName(t.X)
+		if gen != nil && baseName != "" {
+			concreteTypeName := gen.trackGenericInstantiation(baseName, []ast.Expr{typeArg}, ctx)
+			return concreteTypeName + "!"
+		}
+		return ExprToGraphQLTypeWithContext(t.X, config, ctx, gen)
+	case *ast.IndexListExpr:
+		// Handle generic instantiation with multiple params like Map[K, V]
+		// Resolve each type argument through the context
+		typeArgs := make([]ast.Expr, len(t.Indices))
+		for i, arg := range t.Indices {
+			typeArgs[i] = arg
+			if ctx != nil && ctx.TypeSubstitutions != nil {
+				if ident, ok := arg.(*ast.Ident); ok {
+					if substitutedExpr, exists := ctx.TypeSubstitutions[ident.Name]; exists {
+						typeArgs[i] = substitutedExpr
+					}
+				}
+			}
+		}
+
+		baseName := extractBaseTypeName(t.X)
+		if gen != nil && baseName != "" {
+			concreteTypeName := gen.trackGenericInstantiation(baseName, typeArgs, ctx)
+			return concreteTypeName + "!"
+		}
+		return ExprToGraphQLTypeWithContext(t.X, config, ctx, gen)
 	default:
 		return "String!"
 	}
 }
 
+// extractBaseTypeName extracts the base type name from an expression
+func extractBaseTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return extractBaseTypeName(t.X)
+	case *ast.SelectorExpr:
+		return t.Sel.Name
+	}
+	return ""
+}
+
+// isLikelyTypeParameter checks if a name looks like a generic type parameter
+// This is a simple heuristic used when we don't have access to the Generator
+func isLikelyTypeParameter(name string) bool {
+	// Common single-letter type parameters
+	commonParams := map[string]bool{
+		"T": true, "K": true, "V": true, "E": true,
+		"U": true, "R": true, "S": true,
+	}
+	if commonParams[name] {
+		return true
+	}
+
+	// Single uppercase letter (A-Z)
+	if len(name) == 1 && name[0] >= 'A' && name[0] <= 'Z' {
+		return true
+	}
+
+	return false
+}
+
 // ExprToGraphQLTypeForInput converts an ast.Expr to a GraphQL type string for input types
 // It transforms custom type references to input references (e.g., Address -> AddressInput)
 // Built-in types and enums remain unchanged
+// This is a convenience wrapper that calls ExprToGraphQLTypeForInputWithContext with nil context
 func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes map[string]*EnumType) string {
+	return ExprToGraphQLTypeForInputWithContext(expr, knownScalars, enumTypes, nil, nil, nil)
+}
+
+// ExprToGraphQLTypeForInputWithContext converts with context support for type substitutions
+func ExprToGraphQLTypeForInputWithContext(expr ast.Expr, knownScalars []string, enumTypes map[string]*EnumType, config *Config, ctx *GenerationContext, gen *Generator) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
+		// FIRST: Check if this identifier has a substitution in context (for generic type parameters)
+		if ctx != nil && ctx.TypeSubstitutions != nil {
+			if substitutedExpr, exists := ctx.TypeSubstitutions[t.Name]; exists {
+				// Recursively convert the substituted expression
+				return ExprToGraphQLTypeForInputWithContext(substitutedExpr, knownScalars, enumTypes, config, ctx, gen)
+			}
+		}
+
+		// SECOND: Check built-in types
 		switch t.Name {
 		case "string":
 			return "String!"
@@ -95,6 +208,11 @@ func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes m
 		case "Time", "time.Time":
 			return "DateTime!"
 		default:
+			// THIRD: Check if it's an unresolved type parameter
+			if config != nil && config.AutoGenerate.UnresolvedGenericType != "" && isLikelyTypeParameter(t.Name) {
+				return config.AutoGenerate.UnresolvedGenericType + "!"
+			}
+
 			// Check if it's an enum first (enums don't need Input suffix)
 			if enumTypes != nil {
 				if _, isEnum := enumTypes[t.Name]; isEnum {
@@ -111,9 +229,10 @@ func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes m
 			return t.Name + "Input!"
 		}
 	case *ast.StarExpr:
-		return ExprToGraphQLTypeForInput(t.X, knownScalars, enumTypes)
+		// Pass context through
+		return ExprToGraphQLTypeForInputWithContext(t.X, knownScalars, enumTypes, config, ctx, gen)
 	case *ast.ArrayType:
-		return "[" + ExprToGraphQLTypeForInput(t.Elt, knownScalars, enumTypes) + "]!"
+		return "[" + ExprToGraphQLTypeForInputWithContext(t.Elt, knownScalars, enumTypes, config, ctx, gen) + "]!"
 	case *ast.SelectorExpr:
 		// Check if it's an enum
 		if enumTypes != nil {
@@ -122,6 +241,45 @@ func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes m
 			}
 		}
 		return t.Sel.Name + "Input!"
+	case *ast.IndexExpr:
+		// Handle generic instantiation - track and generate concrete type with Input suffix
+		// First, resolve the type argument through the context (for nested generics)
+		typeArg := t.Index
+		if ctx != nil && ctx.TypeSubstitutions != nil {
+			if ident, ok := typeArg.(*ast.Ident); ok {
+				if substitutedExpr, exists := ctx.TypeSubstitutions[ident.Name]; exists {
+					typeArg = substitutedExpr
+				}
+			}
+		}
+
+		baseName := extractBaseTypeName(t.X)
+		if gen != nil && baseName != "" {
+			concreteTypeName := gen.trackGenericInstantiation(baseName, []ast.Expr{typeArg}, ctx)
+			return concreteTypeName + "Input!"
+		}
+		return ExprToGraphQLTypeForInputWithContext(t.X, knownScalars, enumTypes, config, ctx, gen)
+	case *ast.IndexListExpr:
+		// Handle generic instantiation with multiple params
+		// Resolve each type argument through the context
+		typeArgs := make([]ast.Expr, len(t.Indices))
+		for i, arg := range t.Indices {
+			typeArgs[i] = arg
+			if ctx != nil && ctx.TypeSubstitutions != nil {
+				if ident, ok := arg.(*ast.Ident); ok {
+					if substitutedExpr, exists := ctx.TypeSubstitutions[ident.Name]; exists {
+						typeArgs[i] = substitutedExpr
+					}
+				}
+			}
+		}
+
+		baseName := extractBaseTypeName(t.X)
+		if gen != nil && baseName != "" {
+			concreteTypeName := gen.trackGenericInstantiation(baseName, typeArgs, ctx)
+			return concreteTypeName + "Input!"
+		}
+		return ExprToGraphQLTypeForInputWithContext(t.X, knownScalars, enumTypes, config, ctx, gen)
 	default:
 		return "String!"
 	}

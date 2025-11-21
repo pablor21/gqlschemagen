@@ -186,6 +186,16 @@ type AutoGenerateConfig struct {
 	// Action to take for out-of-scope types (types referenced but not in scanned packages)
 	// Options: "warn" (default), "fail", "ignore", "exclude"
 	OutOfScopeTypes OutOfScopeAction `yaml:"out_of_scope_types"`
+
+	// UnresolvedGenericType specifies what type to use for unresolved generic type parameters
+	// Default: "" (keeps as-is, e.g., "T"), common values: "Any", "JSON", or custom scalar name
+	// When a generic type parameter cannot be resolved (e.g., T in Result[T] when used standalone),
+	// this config determines what GraphQL type to use instead
+	UnresolvedGenericType string `yaml:"unresolved_generic_type"`
+
+	// SuppressGenericTypeWarnings suppresses out-of-scope warnings for common type parameters (T, K, V, etc.)
+	// This is useful when using generic types, as type parameters are expected to be unresolved in some contexts
+	SuppressGenericTypeWarnings bool `yaml:"suppress_generic_type_warnings"`
 }
 
 // CLIConfig contains CLI-specific configuration
@@ -281,15 +291,17 @@ func NewConfig() *Config {
 			"Byte", "Bytes", "Int64", "UInt", "UInt64",
 		},
 		AutoGenerate: AutoGenerateConfig{
-			Enabled:                   true,
-			Strategy:                  AutoGenReferenced,
-			MaxDepth:                  1,
-			Patterns:                  []string{},
-			ExcludePatterns:           []string{"*/vendor/*", "*/*_test.go"},
-			OnlyReferencedByAnnotated: true,
-			IncludeEmbedded:           true,
-			IncludeFieldTypes:         true,
-			OutOfScopeTypes:           OutOfScopeWarn,
+			Enabled:                     true,
+			Strategy:                    AutoGenReferenced,
+			MaxDepth:                    1,
+			Patterns:                    []string{},
+			ExcludePatterns:             []string{"*/vendor/*", "*/*_test.go"},
+			OnlyReferencedByAnnotated:   true,
+			IncludeEmbedded:             true,
+			IncludeFieldTypes:           true,
+			OutOfScopeTypes:             OutOfScopeWarn,
+			UnresolvedGenericType:       "",    // Keep type parameters as-is by default
+			SuppressGenericTypeWarnings: false, // Show warnings by default
 		},
 		CLI: CLIConfig{
 			Watcher: WatcherConfig{

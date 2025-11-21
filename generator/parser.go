@@ -55,6 +55,8 @@ type Parser struct {
 	EnumNamespaces map[string]string // enum name -> namespace
 	// Source files for enums
 	EnumSourceFiles map[string]string // enum name -> source file path
+	// Type parameters for generic types
+	TypeParameters map[string][]string // type name -> parameter names (e.g., "Result" -> ["T"], "Map" -> ["K", "V"])
 }
 
 func NewParser() *Parser {
@@ -71,6 +73,7 @@ func NewParser() *Parser {
 		TypeNamespaces:  make(map[string]string),
 		EnumNamespaces:  make(map[string]string),
 		EnumSourceFiles: make(map[string]string),
+		TypeParameters:  make(map[string][]string),
 	}
 }
 
@@ -156,6 +159,19 @@ func (p *Parser) parseFile(path string) error {
 					p.SourceFiles[name] = path // Store source file path
 					p.TypeToDecl[name] = genDecl
 					p.TypeNames = appendIfMissing(p.TypeNames, name)
+
+					// Extract and store type parameters if this is a generic type
+					if t.TypeParams != nil {
+						var params []string
+						for _, field := range t.TypeParams.List {
+							for _, paramName := range field.Names {
+								params = append(params, paramName.Name)
+							}
+						}
+						if len(params) > 0 {
+							p.TypeParameters[name] = params
+						}
+					}
 
 					// Store namespace (file-level or type-level override)
 					if fileNamespace != "" {
