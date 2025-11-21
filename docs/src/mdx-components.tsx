@@ -1,7 +1,8 @@
-import { Alert, Snippet } from "./components";
+import { Alert, Link, Snippet } from "./components";
 
 import { CodeBlock } from "@/components/ui/code-block";
 import type { MDXComponents } from "mdx/types";
+import NextLink from "next/link";
 import { cn } from "@heroui/react";
 
 export function useMDXComponents(): MDXComponents {
@@ -35,5 +36,11 @@ export function useMDXComponents(): MDXComponents {
         <code className="block font-mono">{children}</code>
       </pre>
     ),
+    a: ({ href, ...props }) =>
+      href.startsWith("/") ? (
+        <NextLink href={href} {...props} />
+      ) : (
+        <Link href={href} isExternal {...props} />
+      ),
   };
 }
