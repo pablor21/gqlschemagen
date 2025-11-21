@@ -203,7 +203,39 @@ func (p *Parser) parseFile(path string) error {
 					continue
 				}
 
-				// Check if it's a potential enum (type with @gqlEnum directive)
+				// Check if it's a type alias to a generic instantiation
+				if _, ok := t.Type.(*ast.IndexListExpr); ok {
+					name := t.Name.Name
+					// Store it as if it were a struct so it can be processed
+					p.StructTypes[name] = t
+					p.PackageNames[name] = pkgName
+					p.PackagePaths[name] = pkgImportPath
+					p.SourceFiles[name] = path
+					p.TypeToDecl[name] = genDecl
+					p.TypeNames = appendIfMissing(p.TypeNames, name)
+
+					// Store namespace if present
+					if fileNamespace != "" {
+						p.TypeNamespaces[name] = fileNamespace
+					}
+					continue
+				}
+
+				// Also handle single index expression (Go 1.18 style)
+				if _, ok := t.Type.(*ast.IndexExpr); ok {
+					name := t.Name.Name
+					p.StructTypes[name] = t
+					p.PackageNames[name] = pkgName
+					p.PackagePaths[name] = pkgImportPath
+					p.SourceFiles[name] = path
+					p.TypeToDecl[name] = genDecl
+					p.TypeNames = appendIfMissing(p.TypeNames, name)
+
+					if fileNamespace != "" {
+						p.TypeNamespaces[name] = fileNamespace
+					}
+					continue
+				} // Check if it's a potential enum (type with @gqlEnum directive)
 				if hasGqlEnumDirective(genDecl) {
 					baseType := getBaseTypeName(t.Type)
 					if baseType == "string" || baseType == "int" {

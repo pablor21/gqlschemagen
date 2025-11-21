@@ -88,8 +88,8 @@ type GenericInstantiation struct {
 
 // OutOfScopeReference tracks a reference to an out-of-scope type
 type OutOfScopeReference struct {
-	ParentGoType   string // Go type of the parent struct (e.g., "Company")
-	ParentGQLName  string // GraphQL name of the parent (e.g., "Company" or "CreateCompanyInput")
+	ParentGoType   string // Go type of the parent struct
+	ParentGQLName  string // GraphQL name of the parent (type or input)
 	GoFieldName    string // Go field name (e.g., "Test")
 	FieldName      string // GraphQL field name (e.g., "test")
 	GoFieldType    string // Go field type (e.g., "outofscope.AnotherOutOfScope")
@@ -348,6 +348,18 @@ func (g *Generator) buildDependencyOrder() []string {
 		}
 		visited[n] = true
 		typeSpec := g.P.StructTypes[n]
+
+		// Handle type aliases to generic instantiations (IndexListExpr, IndexExpr)
+		// These should be included in orders but don't have dependencies to traverse
+		if _, ok := typeSpec.Type.(*ast.IndexListExpr); ok {
+			orders = append(orders, n)
+			return
+		}
+		if _, ok := typeSpec.Type.(*ast.IndexExpr); ok {
+			orders = append(orders, n)
+			return
+		}
+
 		st, ok := typeSpec.Type.(*ast.StructType)
 		if !ok {
 			return
@@ -373,11 +385,27 @@ func (g *Generator) buildDependencyOrder() []string {
 func (g *Generator) generateTypeContent(typeName string, typeSpec *ast.TypeSpec, d StructDirectives, ctx *GenerationContext) string {
 	buf := strings.Builder{}
 
+	// Check if this is a type alias to a generic instantiation
+	if indexListExpr, ok := typeSpec.Type.(*ast.IndexListExpr); ok {
+		// This is a generic instantiation alias - generate it as a concrete type
+		return g.generateGenericAliasType(typeName, indexListExpr, d, ctx)
+	}
+	if indexExpr, ok := typeSpec.Type.(*ast.IndexExpr); ok {
+		// Single type parameter (Go 1.18 style)
+		return g.generateGenericAliasTypeSingle(typeName, indexExpr, d, ctx)
+	}
+
+	// Normal struct type processing
+	st, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		return ""
+	}
+
 	// Generate all types from @gqlType directives
 	if d.HasTypeDirective {
 		slog.Debug("Generating type from directive", "type", typeName, "count", len(d.Types))
 		for _, typeDef := range d.Types {
-			typeContent := g.generateTypeFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, typeDef, ctx)
+			typeContent := g.generateTypeFromDef(typeSpec, st, d, typeDef, ctx)
 			if typeContent != "" {
 				buf.WriteString(typeContent)
 			}
@@ -389,7 +417,7 @@ func (g *Generator) generateTypeContent(typeName string, typeSpec *ast.TypeSpec,
 			Name:        typeName,
 			Description: "",
 		}
-		typeContent := g.generateTypeFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, defaultTypeDef, ctx)
+		typeContent := g.generateTypeFromDef(typeSpec, st, d, defaultTypeDef, ctx)
 		if typeContent != "" {
 			buf.WriteString(typeContent)
 		}
@@ -403,11 +431,27 @@ func (g *Generator) generateTypeContent(typeName string, typeSpec *ast.TypeSpec,
 func (g *Generator) generateInputContent(typeName string, typeSpec *ast.TypeSpec, d StructDirectives, ctx *GenerationContext) string {
 	buf := strings.Builder{}
 
+	// Check if it's a type alias to a generic instantiation
+	if indexListExpr, ok := typeSpec.Type.(*ast.IndexListExpr); ok {
+		// This is a generic instantiation alias - generate it as a concrete input if needed
+		return g.generateGenericAliasInput(typeName, indexListExpr, d, ctx)
+	}
+	if indexExpr, ok := typeSpec.Type.(*ast.IndexExpr); ok {
+		// Single type parameter (Go 1.18 style)
+		return g.generateGenericAliasInputSingle(typeName, indexExpr, d, ctx)
+	}
+
+	// Normal struct type processing
+	st, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		return ""
+	}
+
 	// Generate all inputs from @gqlInput directives
 	if d.HasInputDirective {
 		slog.Debug("Generating input from directive", "type", typeName, "count", len(d.Inputs))
 		for _, inputDef := range d.Inputs {
-			inputContent := g.generateInputFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, inputDef, ctx)
+			inputContent := g.generateInputFromDef(typeSpec, st, d, inputDef, ctx)
 			if inputContent != "" {
 				buf.WriteString(inputContent)
 			}
@@ -419,7 +463,7 @@ func (g *Generator) generateInputContent(typeName string, typeSpec *ast.TypeSpec
 			Name:        typeName + "Input",
 			Description: "",
 		}
-		inputContent := g.generateInputFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, defaultInputDef, ctx)
+		inputContent := g.generateInputFromDef(typeSpec, st, d, defaultInputDef, ctx)
 		if inputContent != "" {
 			buf.WriteString(inputContent)
 		}
@@ -1586,6 +1630,11 @@ func (g *Generator) generateFieldsForTypeNamed(st *ast.StructType, d StructDirec
 			}
 		}
 
+		// Skip field if type resolution returned empty (means the type has no input and shouldn't be in inputs)
+		if fieldType == "" {
+			continue
+		}
+
 		// Check if field type is out of scope (if no custom type was specified)
 		if opt.Type == "" {
 			baseTypeName := g.extractBaseTypeName(fieldType)
@@ -1901,6 +1950,267 @@ func (g *Generator) expandEmbeddedFieldNamed(f *ast.Field, d StructDirectives, i
 	}
 
 	return g.generateFieldsForTypeNamed(embeddedStruct, embeddedDirectives, false, forInput, typeName, embeddedTypeName, embeddedCtx, fieldPrefix, &embeddedOpts)
+}
+
+// generateGenericAliasType generates GraphQL type for a type alias to a generic instantiation
+// Type aliases to generics are automatically generated (no @gqlType directive required)
+func (g *Generator) generateGenericAliasType(typeName string, indexListExpr *ast.IndexListExpr, d StructDirectives, ctx *GenerationContext) string {
+	// Get the base generic type name
+	var genericTypeName string
+	var pkgPath string
+
+	switch x := indexListExpr.X.(type) {
+	case *ast.Ident:
+		genericTypeName = x.Name
+		// Local type
+		pkgPath = ""
+	case *ast.SelectorExpr:
+		genericTypeName = x.Sel.Name
+		// External type - need to determine package path from the selector
+		if pkgIdent, ok := x.X.(*ast.Ident); ok {
+			pkgName := pkgIdent.Name
+			// Try to find the package path from already parsed types
+			// For now, try to load it if it's not already loaded
+			fullTypeName := pkgName + "." + genericTypeName
+			if typeSpec, exists := g.P.StructTypes[genericTypeName]; !exists || typeSpec == nil {
+				// Type not loaded - try loading from context
+				// For simplicity, check if we have any types from this package
+				for tn := range g.P.StructTypes {
+					if pkg := g.P.PackageNames[tn]; pkg == pkgName {
+						pkgPath = g.P.PackagePaths[tn]
+						break
+					}
+				}
+				if pkgPath == "" {
+					slog.Warn("Could not find package path for external generic type", "type", fullTypeName)
+					return ""
+				}
+			}
+		}
+	default:
+		return ""
+	}
+
+	// Get the generic type's TypeSpec
+	typeSpec, exists := g.P.StructTypes[genericTypeName]
+	if !exists {
+		slog.Warn("Generic type not found for alias", "alias", typeName, "genericType", genericTypeName)
+		return ""
+	}
+
+	st, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		slog.Warn("Generic type is not a struct", "type", genericTypeName)
+		return ""
+	}
+
+	// Build type substitutions from the type arguments
+	typeSubstitutions := make(map[string]ast.Expr)
+	if typeSpec.TypeParams != nil {
+		for i, typeParam := range typeSpec.TypeParams.List {
+			if i < len(indexListExpr.Indices) {
+				for _, name := range typeParam.Names {
+					typeSubstitutions[name.Name] = indexListExpr.Indices[i]
+				}
+			}
+		}
+	}
+
+	// Create new context with substitutions
+	newCtx := &GenerationContext{
+		OutputFile:        ctx.OutputFile,
+		Strategy:          ctx.Strategy,
+		Namespace:         ctx.Namespace,
+		TypeSubstitutions: typeSubstitutions,
+	}
+
+	// Generate as a regular type
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("type %s {\n", typeName))
+	fields := g.generateFieldsForTypeNamed(st, d, false, false, typeName, genericTypeName, newCtx, "", nil)
+	buf.WriteString(fields)
+	buf.WriteString("}\n\n")
+
+	// Register the generated item
+	sourceFile := g.P.SourceFiles[typeName] // Use the alias's source file
+	if sourceFile == "" {
+		sourceFile = g.P.SourceFiles[genericTypeName]
+	}
+
+	goTypePath := g.P.PackagePaths[typeName]
+	if goTypePath == "" && pkgPath != "" {
+		goTypePath = pkgPath
+	} else if goTypePath == "" {
+		goTypePath = g.P.PackagePaths[genericTypeName]
+	}
+
+	g.registerGeneratedItem(GQLSchemaItem{
+		OutputFile:    ctx.OutputFile,
+		GoSourceFile:  sourceFile,
+		GoType:        goTypePath + "." + typeName,
+		GoTypeName:    typeName,
+		GQLName:       typeName,
+		GQLKind:       "type",
+		Strategy:      ctx.Strategy,
+		AutoGenerated: false, // This is explicitly defined by user
+		Namespace:     ctx.Namespace,
+	})
+
+	return buf.String()
+}
+
+// generateGenericAliasTypeSingle handles single type parameter (Go 1.18 style)
+func (g *Generator) generateGenericAliasTypeSingle(typeName string, indexExpr *ast.IndexExpr, d StructDirectives, ctx *GenerationContext) string {
+	// Convert to IndexListExpr format
+	indexListExpr := &ast.IndexListExpr{
+		X:       indexExpr.X,
+		Indices: []ast.Expr{indexExpr.Index},
+	}
+	return g.generateGenericAliasType(typeName, indexListExpr, d, ctx)
+}
+
+// generateGenericAliasInput generates GraphQL input for a type alias to a generic instantiation
+// Type aliases to generics are automatically generated (no @gqlInput directive required)
+func (g *Generator) generateGenericAliasInput(typeName string, indexListExpr *ast.IndexListExpr, d StructDirectives, ctx *GenerationContext) string {
+	// Get the base generic type name
+	var genericTypeName string
+	var pkgPath string
+
+	switch x := indexListExpr.X.(type) {
+	case *ast.Ident:
+		genericTypeName = x.Name
+		// Local type
+		pkgPath = ""
+	case *ast.SelectorExpr:
+		genericTypeName = x.Sel.Name
+		// External type - need to determine package path from the selector
+		if pkgIdent, ok := x.X.(*ast.Ident); ok {
+			pkgName := pkgIdent.Name
+			// Try to find the package path from already parsed types
+			for tn := range g.P.StructTypes {
+				if pkg := g.P.PackageNames[tn]; pkg == pkgName {
+					pkgPath = g.P.PackagePaths[tn]
+					break
+				}
+			}
+			if pkgPath == "" {
+				slog.Warn("Could not find package path for external generic type", "type", pkgName+"."+genericTypeName)
+				return ""
+			}
+		}
+	default:
+		return ""
+	}
+
+	// Get the generic type's TypeSpec
+	typeSpec, exists := g.P.StructTypes[genericTypeName]
+	if !exists {
+		slog.Warn("Generic type not found for alias input", "alias", typeName, "genericType", genericTypeName)
+		return ""
+	}
+
+	st, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		slog.Warn("Generic type is not a struct for input", "type", genericTypeName)
+		return ""
+	}
+
+	// Build type substitutions from the type arguments
+	typeSubstitutions := make(map[string]ast.Expr)
+	if typeSpec.TypeParams != nil {
+		for i, typeParam := range typeSpec.TypeParams.List {
+			if i < len(indexListExpr.Indices) {
+				for _, name := range typeParam.Names {
+					typeSubstitutions[name.Name] = indexListExpr.Indices[i]
+				}
+			}
+		}
+	}
+
+	// Create new context with substitutions
+	newCtx := &GenerationContext{
+		OutputFile:        ctx.OutputFile,
+		Strategy:          ctx.Strategy,
+		Namespace:         ctx.Namespace,
+		TypeSubstitutions: typeSubstitutions,
+	}
+
+	// Generate inputs based on directives or auto-generation
+	var buf strings.Builder
+	if d.HasInputDirective {
+		// User specified custom input names via directives
+		for _, inputDef := range d.Inputs {
+			buf.WriteString(fmt.Sprintf("input %s {\n", inputDef.Name))
+			fields := g.generateFieldsForTypeNamed(st, d, false, true, typeName, genericTypeName, newCtx, "", nil)
+			buf.WriteString(fields)
+			buf.WriteString("}\n\n")
+
+			// Register the generated item
+			sourceFile := g.P.SourceFiles[typeName]
+			if sourceFile == "" {
+				sourceFile = g.P.SourceFiles[genericTypeName]
+			}
+
+			goTypePath := g.P.PackagePaths[typeName]
+			if goTypePath == "" && pkgPath != "" {
+				goTypePath = pkgPath
+			} else if goTypePath == "" {
+				goTypePath = g.P.PackagePaths[genericTypeName]
+			}
+
+			g.registerGeneratedItem(GQLSchemaItem{
+				OutputFile:   ctx.OutputFile,
+				GoSourceFile: sourceFile,
+				GoType:       goTypePath + "." + typeName,
+				GoTypeName:   typeName,
+				GQLName:      inputDef.Name,
+				GQLKind:      "input",
+				Namespace:    ctx.Namespace,
+			})
+		}
+	} else {
+		// Auto-generate with default name: {TypeName}Input
+		inputName := typeName + "Input"
+		buf.WriteString(fmt.Sprintf("input %s {\n", inputName))
+		fields := g.generateFieldsForTypeNamed(st, d, false, true, typeName, genericTypeName, newCtx, "", nil)
+		buf.WriteString(fields)
+		buf.WriteString("}\n\n")
+
+		// Register the generated item
+		sourceFile := g.P.SourceFiles[typeName]
+		if sourceFile == "" {
+			sourceFile = g.P.SourceFiles[genericTypeName]
+		}
+
+		goTypePath := g.P.PackagePaths[typeName]
+		if goTypePath == "" && pkgPath != "" {
+			goTypePath = pkgPath
+		} else if goTypePath == "" {
+			goTypePath = g.P.PackagePaths[genericTypeName]
+		}
+
+		g.registerGeneratedItem(GQLSchemaItem{
+			OutputFile:   ctx.OutputFile,
+			GoSourceFile: sourceFile,
+			GoType:       goTypePath + "." + typeName,
+			GoTypeName:   typeName,
+			GQLName:      inputName,
+			GQLKind:      "input",
+			Namespace:    ctx.Namespace,
+		})
+	}
+
+	return buf.String()
+}
+
+// generateGenericAliasInputSingle handles single type parameter (Go 1.18 style)
+func (g *Generator) generateGenericAliasInputSingle(typeName string, indexExpr *ast.IndexExpr, d StructDirectives, ctx *GenerationContext) string {
+	// Convert to IndexListExpr format
+	indexListExpr := &ast.IndexListExpr{
+		X:       indexExpr.X,
+		Indices: []ast.Expr{indexExpr.Index},
+	}
+	return g.generateGenericAliasInput(typeName, indexListExpr, d, ctx)
 }
 
 // generateConcreteTypesFromInstantiations generates concrete types for tracked generic instantiations
