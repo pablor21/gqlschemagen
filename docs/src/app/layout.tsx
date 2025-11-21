@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     siteName: "GQLSchemaGen",
   },
   metadataBase: new URL(
-    process.env.PAGES_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`
+    process.env.PAGES_ORIGIN ?? `http://localhost:${process.env.PORT ?? 3000}`
   ),
 };
 

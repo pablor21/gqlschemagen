@@ -147,7 +147,7 @@ export default function Home() {
               size="lg"
               endContent={<ArrowRight size={18} />}
               className="font-semibold"
-              as={Link}
+              as={NextLink}
               href="/docs"
             >
               Read the Docs
