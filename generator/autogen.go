@@ -109,8 +109,9 @@ func (g *Generator) BuildDependencyGraph() *DependencyGraph {
 	}
 
 	// Second pass: Build edges by analyzing struct fields
-	for typeName, structType := range g.P.Structs {
-		if structType.Fields == nil {
+	for typeName, typeSpec := range g.P.StructTypes {
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok || structType.Fields == nil {
 			continue
 		}
 		for _, field := range structType.Fields.List {
@@ -151,13 +152,17 @@ func (g *Generator) extractTypeReferences(expr ast.Expr) []string {
 		if ident, ok := t.X.(*ast.Ident); ok {
 			// Try to find the type in our structs
 			typeName := t.Sel.Name
-			if _, exists := g.P.Structs[typeName]; exists {
-				types = append(types, typeName)
+			if ts, exists := g.P.StructTypes[typeName]; exists {
+				if _, ok := ts.Type.(*ast.StructType); ok {
+					types = append(types, typeName)
+				}
 			}
 			// Also check with package prefix
 			fullName := ident.Name + "." + typeName
-			if _, exists := g.P.Structs[fullName]; exists {
-				types = append(types, fullName)
+			if ts, exists := g.P.StructTypes[fullName]; exists {
+				if _, ok := ts.Type.(*ast.StructType); ok {
+					types = append(types, fullName)
+				}
 			}
 		}
 

@@ -36,7 +36,6 @@ type EnumType struct {
 // Parser collects type specs and related AST nodes across a root dir
 type Parser struct {
 	StructTypes  map[string]*ast.TypeSpec
-	Structs      map[string]*ast.StructType
 	PackageNames map[string]string
 	PackagePaths map[string]string // Full import path for each type
 	SourceFiles  map[string]string // Source file path for each type (absolute OS path)
@@ -57,12 +56,23 @@ type Parser struct {
 	EnumSourceFiles map[string]string // enum name -> source file path
 	// Type parameters for generic types
 	TypeParameters map[string][]string // type name -> parameter names (e.g., "Result" -> ["T"], "Map" -> ["K", "V"])
+	// Scanned types registry - tracks all types we've scanned with their GQL annotations
+	// Key: Go type name, Value: metadata about the scanned type
+	ScannedTypes map[string]*ScannedTypeInfo
+}
+
+// ScannedTypeInfo stores metadata about a scanned type
+type ScannedTypeInfo struct {
+	TypeName          string   // Go type name
+	HasTypeDirective  bool     // Has @gqlType annotation
+	HasInputDirective bool     // Has @gqlInput annotation
+	GeneratedTypes    []string // List of GraphQL type names generated from this struct (from @gqlType)
+	GeneratedInputs   []string // List of GraphQL input names generated from this struct (from @gqlInput)
 }
 
 func NewParser() *Parser {
 	return &Parser{
 		StructTypes:     make(map[string]*ast.TypeSpec),
-		Structs:         make(map[string]*ast.StructType),
 		PackageNames:    make(map[string]string),
 		PackagePaths:    make(map[string]string),
 		SourceFiles:     make(map[string]string),
@@ -74,6 +84,7 @@ func NewParser() *Parser {
 		EnumNamespaces:  make(map[string]string),
 		EnumSourceFiles: make(map[string]string),
 		TypeParameters:  make(map[string][]string),
+		ScannedTypes:    make(map[string]*ScannedTypeInfo),
 	}
 }
 
@@ -150,10 +161,9 @@ func (p *Parser) parseFile(path string) error {
 				}
 
 				// Check if it's a struct
-				if s, ok := t.Type.(*ast.StructType); ok {
+				if _, ok := t.Type.(*ast.StructType); ok {
 					name := t.Name.Name
 					p.StructTypes[name] = t
-					p.Structs[name] = s
 					p.PackageNames[name] = pkgName
 					p.PackagePaths[name] = path
 					p.SourceFiles[name] = path // Store source file path
@@ -342,11 +352,10 @@ func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string 
 	if pkgIndex == -1 {
 		// Package directory not found in path, use modelPath as-is
 		return modelPath
-	}
-
-	// Check if there are meaningful parent directories between module root and package
+	} // Check if there are meaningful parent directories between module root and package
 	// Look for structure like: internal/models, pkg/entities, api/v2/models, etc.
 	var subPath []string
+	stopAtNext := false
 
 	// Collect directories from package backward until we hit a likely module boundary
 	for i := pkgIndex; i >= 0; i-- {
@@ -357,18 +366,26 @@ func (p *Parser) GetPackageImportPath(typeName string, modelPath string) string 
 			continue
 		}
 
+		// If we should stop after this iteration
+		if stopAtNext {
+			break
+		}
+
 		subPath = append([]string{part}, subPath...)
 
-		// Stop if we hit common module structure markers (but include them)
+		// Stop if we hit common module structure markers (but include them in the path)
 		if part == "internal" || part == "pkg" || part == "cmd" || part == "api" {
 			break
 		}
-	}
 
-	// If we only have the package name itself, return modelPath as-is
-	// This handles cases where modelPath already points to the complete package location
-	if len(subPath) == 1 && subPath[0] == pkgName {
-		return modelPath
+		// Also check if parent is a common test/development directory name - these typically are at module root
+		if i > 0 {
+			parentPart := parts[i-1]
+			// If parent is "dev", "test", "examples", etc., stop after including current part
+			if parentPart == "dev" || parentPart == "test" || parentPart == "examples" || parentPart == "demo" {
+				stopAtNext = true
+			}
+		}
 	}
 
 	// Otherwise, append the sub-path to modelPath

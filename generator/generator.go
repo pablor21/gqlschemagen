@@ -156,6 +156,9 @@ func (g *Generator) Run() error {
 		g.applyAutoGeneration(depGraph)
 	}
 
+	// Build scanned types registry with GQL annotation metadata
+	g.buildScannedTypesRegistry()
+
 	// Check if we have any namespaces defined
 	hasNamespaces := len(g.P.TypeNamespaces) > 0 || len(g.P.EnumNamespaces) > 0
 
@@ -295,13 +298,17 @@ func (g *Generator) buildDependencyOrder() []string {
 			return
 		}
 		visited[n] = true
-		st := g.P.Structs[n]
-		if st == nil {
+		typeSpec := g.P.StructTypes[n]
+		st, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
 			return
 		}
 		for _, f := range st.Fields.List {
 			ft := FieldTypeName(f.Type)
-			if _, ok := g.P.Structs[ft]; ok {
+			if ts, ok := g.P.StructTypes[ft]; ok {
+				if _, ok := ts.Type.(*ast.StructType); !ok {
+					continue
+				}
 				dfs(ft)
 			}
 		}
@@ -322,7 +329,7 @@ func (g *Generator) generateTypeContent(typeName string, typeSpec *ast.TypeSpec,
 	if d.HasTypeDirective {
 		slog.Debug("Generating type from directive", "type", typeName, "count", len(d.Types))
 		for _, typeDef := range d.Types {
-			typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, typeDef, ctx)
+			typeContent := g.generateTypeFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, typeDef, ctx)
 			if typeContent != "" {
 				buf.WriteString(typeContent)
 			}
@@ -334,7 +341,7 @@ func (g *Generator) generateTypeContent(typeName string, typeSpec *ast.TypeSpec,
 			Name:        typeName,
 			Description: "",
 		}
-		typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, defaultTypeDef, ctx)
+		typeContent := g.generateTypeFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, defaultTypeDef, ctx)
 		if typeContent != "" {
 			buf.WriteString(typeContent)
 		}
@@ -352,7 +359,7 @@ func (g *Generator) generateInputContent(typeName string, typeSpec *ast.TypeSpec
 	if d.HasInputDirective {
 		slog.Debug("Generating input from directive", "type", typeName, "count", len(d.Inputs))
 		for _, inputDef := range d.Inputs {
-			inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, inputDef, ctx)
+			inputContent := g.generateInputFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, inputDef, ctx)
 			if inputContent != "" {
 				buf.WriteString(inputContent)
 			}
@@ -364,7 +371,7 @@ func (g *Generator) generateInputContent(typeName string, typeSpec *ast.TypeSpec
 			Name:        typeName + "Input",
 			Description: "",
 		}
-		inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, defaultInputDef, ctx)
+		inputContent := g.generateInputFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, defaultInputDef, ctx)
 		if inputContent != "" {
 			buf.WriteString(inputContent)
 		}
@@ -534,7 +541,7 @@ func (g *Generator) generateByNamespace(orders []string) (map[string]string, err
 		for _, typeName := range typeNames {
 			typeDefs := items.types[typeName]
 			typeSpec := g.P.StructTypes[typeName]
-			structType := g.P.Structs[typeName]
+			structType := typeSpec.Type.(*ast.StructType)
 			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
 
 			for _, typeDef := range typeDefs {
@@ -543,13 +550,11 @@ func (g *Generator) generateByNamespace(orders []string) (map[string]string, err
 					buf.WriteString(typeContent)
 				}
 			}
-		}
-
-		// Generate inputs for this namespace
+		} // Generate inputs for this namespace
 		slog.Debug("Generating inputs for namespace", "namespace", namespace, "count", len(items.inputs))
 		for typeName, inputDefs := range items.inputs {
 			typeSpec := g.P.StructTypes[typeName]
-			structType := g.P.Structs[typeName]
+			structType := typeSpec.Type.(*ast.StructType)
 			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
 
 			for _, inputDef := range inputDefs {
@@ -718,7 +723,7 @@ func (g *Generator) generateByNamespaceAndPackage(orders []string) (map[string]s
 					Strategy:   "namespace+package",
 					Namespace:  ns,
 				}
-				typeContent := g.generateTypeFromDef(typeSpec, g.P.Structs[typeName], d, typeDef, ctx)
+				typeContent := g.generateTypeFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, typeDef, ctx)
 				if typeContent != "" {
 					buf.WriteString(typeContent)
 				}
@@ -760,7 +765,7 @@ func (g *Generator) generateByNamespaceAndPackage(orders []string) (map[string]s
 					Strategy:   "namespace+package",
 					Namespace:  ns,
 				}
-				inputContent := g.generateInputFromDef(typeSpec, g.P.Structs[typeName], d, inputDef, ctx)
+				inputContent := g.generateInputFromDef(typeSpec, typeSpec.Type.(*ast.StructType), d, inputDef, ctx)
 				if inputContent != "" {
 					buf.WriteString(inputContent)
 				}
@@ -1006,7 +1011,7 @@ func (g *Generator) generatePackageFiles(orders []string) (map[string]string, er
 		for _, typeName := range typeNames {
 			typeDefs := items.types[typeName]
 			typeSpec := g.P.StructTypes[typeName]
-			structType := g.P.Structs[typeName]
+			structType := typeSpec.Type.(*ast.StructType)
 			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
 
 			for _, typeDef := range typeDefs {
@@ -1015,13 +1020,11 @@ func (g *Generator) generatePackageFiles(orders []string) (map[string]string, er
 					buf.WriteString(typeContent)
 				}
 			}
-		}
-
-		// Generate inputs for this package
+		} // Generate inputs for this package
 		slog.Debug("Generating inputs for package", "package", pkgPath, "count", len(items.inputs))
 		for typeName, inputDefs := range items.inputs {
 			typeSpec := g.P.StructTypes[typeName]
-			structType := g.P.Structs[typeName]
+			structType := typeSpec.Type.(*ast.StructType)
 			d := ParseDirectives(typeSpec, g.P.TypeToDecl[typeName])
 
 			for _, inputDef := range inputDefs {
@@ -1673,15 +1676,18 @@ func (g *Generator) expandEmbeddedFieldNamed(f *ast.Field, d StructDirectives, i
 	}
 
 	// Look up the embedded struct in the parser
-	embeddedStruct, exists := g.P.Structs[embeddedTypeName]
+	typeSpec, exists := g.P.StructTypes[embeddedTypeName]
 	if !exists {
 		return "" // Embedded struct not found in parsed types
+	}
+	embeddedStruct, ok := typeSpec.Type.(*ast.StructType)
+	if !ok {
+		return "" // Not a struct type
 	}
 
 	// If generating for input and the embedded type should be auto-generated as input,
 	// mark it for generation
 	if forInput {
-		typeSpec := g.P.StructTypes[embeddedTypeName]
 		if typeSpec != nil {
 			genDecl := g.P.TypeToDecl[embeddedTypeName]
 			directives := ParseDirectives(typeSpec, genDecl)
@@ -1994,6 +2000,43 @@ func (g *Generator) extractBaseTypeName(graphQLType string) string {
 }
 
 // isTypeInScope checks if a type name exists in the parsed types (structs or enums)
+// buildScannedTypesRegistry populates the ScannedTypes registry with metadata about all scanned types
+func (g *Generator) buildScannedTypesRegistry() {
+	for typeName, typeSpec := range g.P.StructTypes {
+		if genDecl, hasDecl := g.P.TypeToDecl[typeName]; hasDecl {
+			directives := ParseDirectives(typeSpec, genDecl)
+
+			info := &ScannedTypeInfo{
+				TypeName:          typeName,
+				HasTypeDirective:  directives.HasTypeDirective,
+				HasInputDirective: directives.HasInputDirective,
+				GeneratedTypes:    make([]string, 0),
+				GeneratedInputs:   make([]string, 0),
+			}
+
+			// Collect generated type names from @gqlType annotations
+			for _, typeDef := range directives.Types {
+				if typeDef.Name != "" {
+					info.GeneratedTypes = append(info.GeneratedTypes, typeDef.Name)
+				} else {
+					info.GeneratedTypes = append(info.GeneratedTypes, typeName)
+				}
+			}
+
+			// Collect generated input names from @gqlInput annotations
+			for _, inputDef := range directives.Inputs {
+				if inputDef.Name != "" {
+					info.GeneratedInputs = append(info.GeneratedInputs, inputDef.Name)
+				} else {
+					info.GeneratedInputs = append(info.GeneratedInputs, typeName+"Input")
+				}
+			}
+
+			g.P.ScannedTypes[typeName] = info
+		}
+	}
+}
+
 func (g *Generator) isTypeInScope(typeName string) bool {
 	if typeName == "" {
 		return true
@@ -2004,7 +2047,23 @@ func (g *Generator) isTypeInScope(typeName string) bool {
 		return true
 	}
 
-	// Check if it's a struct type
+	// Check if this type name was generated from a scanned type with GQL annotations
+	for _, scannedInfo := range g.P.ScannedTypes {
+		// Check if typeName matches any generated type names
+		for _, genType := range scannedInfo.GeneratedTypes {
+			if genType == typeName {
+				return true
+			}
+		}
+		// Check if typeName matches any generated input names
+		for _, genInput := range scannedInfo.GeneratedInputs {
+			if genInput == typeName {
+				return true
+			}
+		}
+	}
+
+	// Check if it's a struct type (scanned but no annotations)
 	if _, exists := g.P.StructTypes[typeName]; exists {
 		return true
 	}
