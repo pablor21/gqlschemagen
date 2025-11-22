@@ -40,6 +40,85 @@ func FieldTypeName(expr ast.Expr) string {
 	}
 }
 
+// resolveScalarMapping checks if an expression maps to a configured scalar
+// Returns the scalar name or empty string if no mapping found
+func resolveScalarMapping(expr ast.Expr, gen *Generator, config *Config) string {
+	// Unwrap pointers and arrays to get the base type
+	baseExpr := expr
+	for {
+		switch t := baseExpr.(type) {
+		case *ast.StarExpr:
+			baseExpr = t.X
+		case *ast.ArrayType:
+			baseExpr = t.Elt
+		default:
+			goto done
+		}
+	}
+done:
+
+	// Get the type name and package
+	var typeName, pkgName string
+	switch t := baseExpr.(type) {
+	case *ast.Ident:
+		typeName = t.Name
+		// For simple identifiers, we need to check if it's an imported type
+		// The parser stores package names for types
+		if gen != nil && gen.P != nil {
+			pkgName = gen.P.PackageNames[typeName]
+		}
+	case *ast.SelectorExpr:
+		// pkg.Type format
+		typeName = t.Sel.Name
+		if pkgIdent, ok := t.X.(*ast.Ident); ok {
+			pkgName = pkgIdent.Name
+		}
+	default:
+		return ""
+	}
+
+	if typeName == "" {
+		return ""
+	}
+
+	// Resolve full package path
+	var fullPath string
+	if gen != nil && gen.P != nil {
+		// For SelectorExpr (pkg.Type), resolve the package alias to import path
+		if pkgName != "" {
+			// First, try to resolve via fileImports (actual import statements)
+			if importPath, ok := gen.P.fileImports[pkgName]; ok {
+				fullPath = importPath + "." + typeName
+			} else if importPath, ok := gen.P.PackagePaths[typeName]; ok {
+				// Fallback: check if this is a known type with a package path
+				fullPath = importPath + "." + typeName
+			} else {
+				// Last resort: construct using package name
+				fullPath = pkgName + "." + typeName
+			}
+		} else {
+			// For simple Ident, check if it's a known type
+			if importPath, ok := gen.P.PackagePaths[typeName]; ok {
+				fullPath = importPath + "." + typeName
+			}
+		}
+	}
+
+	// Fallback: handle built-in types from standard library
+	if fullPath == "" && typeName != "" {
+		switch typeName {
+		case "Time":
+			fullPath = "time.Time"
+		default:
+			// For unqualified types without package info, can't resolve
+			return ""
+		}
+	}
+
+	// Check the scalar mappings
+	return config.GetScalarForGoType(fullPath)
+}
+
 // ExprToGraphQLType converts an ast.Expr to a GraphQL type string (with ! for required)
 // This is a convenience wrapper that calls ExprToGraphQLTypeWithContext with nil context
 func ExprToGraphQLType(expr ast.Expr) string {
@@ -49,6 +128,20 @@ func ExprToGraphQLType(expr ast.Expr) string {
 // ExprToGraphQLTypeWithContext converts an ast.Expr to a GraphQL type string with context support
 // The context provides type substitutions for generic type parameters and config for unresolved types
 func ExprToGraphQLTypeWithContext(expr ast.Expr, config *Config, ctx *GenerationContext, gen *Generator) string {
+	// FIRST: Check scalar mappings if we have a generator (needed to resolve package paths)
+	if gen != nil && config != nil && config.Scalars != nil {
+		if scalarName := resolveScalarMapping(expr, gen, config); scalarName != "" {
+			// Check if it's a pointer or array and preserve those modifiers
+			if _, isPtr := expr.(*ast.StarExpr); isPtr {
+				return scalarName // GraphQL doesn't have nullable scalars, already handled
+			}
+			if _, isArray := expr.(*ast.ArrayType); isArray {
+				return "[" + scalarName + "!]!"
+			}
+			return scalarName + "!"
+		}
+	}
+
 	switch t := expr.(type) {
 	case *ast.Ident:
 		// FIRST: Check if this identifier has a substitution in context (for generic type parameters)
@@ -181,6 +274,20 @@ func ExprToGraphQLTypeForInput(expr ast.Expr, knownScalars []string, enumTypes m
 
 // ExprToGraphQLTypeForInputWithContext converts with context support for type substitutions
 func ExprToGraphQLTypeForInputWithContext(expr ast.Expr, knownScalars []string, enumTypes map[string]*EnumType, config *Config, ctx *GenerationContext, gen *Generator) string {
+	// FIRST: Check scalar mappings if we have a generator
+	if gen != nil && config != nil && config.Scalars != nil {
+		if scalarName := resolveScalarMapping(expr, gen, config); scalarName != "" {
+			// Check if it's a pointer or array and preserve those modifiers
+			if _, isPtr := expr.(*ast.StarExpr); isPtr {
+				return scalarName // GraphQL doesn't have nullable scalars
+			}
+			if _, isArray := expr.(*ast.ArrayType); isArray {
+				return "[" + scalarName + "!]!"
+			}
+			return scalarName + "!"
+		}
+	}
+
 	switch t := expr.(type) {
 	case *ast.Ident:
 		// FIRST: Check if this identifier has a substitution in context (for generic type parameters)

@@ -124,6 +124,11 @@ type Config struct {
 	// These types are always considered "in scope" and won't trigger out-of-scope warnings
 	KnownScalars []string `yaml:"known_scalars"`
 
+	// Scalars maps GraphQL scalar names to Go package types
+	// Example: Scalars["ID"] = ScalarMapping{Model: ["github.com/google/uuid.UUID"]}
+	// This allows mapping Go types like uuid.UUID to GraphQL scalars like ID
+	Scalars map[string]ScalarMapping `yaml:"scalars"`
+
 	// Auto-generation configuration
 	AutoGenerate AutoGenerateConfig `yaml:"auto_generate"`
 
@@ -198,6 +203,13 @@ type AutoGenerateConfig struct {
 	// SuppressGenericTypeWarnings suppresses out-of-scope warnings for common type parameters (T, K, V, etc.)
 	// This is useful when using generic types, as type parameters are expected to be unresolved in some contexts
 	SuppressGenericTypeWarnings bool `yaml:"suppress_generic_type_warnings"`
+}
+
+// ScalarMapping maps Go types to GraphQL scalars
+type ScalarMapping struct {
+	// Model is a list of Go package paths that map to this scalar
+	// Example: ["github.com/google/uuid.UUID", "github.com/gofrs/uuid.UUID"]
+	Model []string `yaml:"model"`
 }
 
 // CLIConfig contains CLI-specific configuration
@@ -562,4 +574,58 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// GetScalarForGoType returns the GraphQL scalar name for a given Go type package path
+// Returns empty string if no mapping exists
+func (c *Config) GetScalarForGoType(goTypePath string) string {
+	if c.Scalars == nil {
+		return ""
+	}
+
+	for scalarName, mapping := range c.Scalars {
+		for _, modelPath := range mapping.Model {
+			if modelPath == goTypePath {
+				return scalarName
+			}
+		}
+	}
+
+	return ""
+}
+
+// IsBuiltInScalar returns true if the scalar is a built-in GraphQL scalar
+func IsBuiltInScalar(scalarName string) bool {
+	builtIns := map[string]bool{
+		"Int":     true,
+		"Float":   true,
+		"String":  true,
+		"Boolean": true,
+		"ID":      true,
+	}
+	return builtIns[scalarName]
+}
+
+// GetUsedCustomScalars returns all custom scalar names used in scalar mappings
+// Excludes built-in GraphQL scalars (Int, Float, String, Boolean, ID) and known_scalars
+func (c *Config) GetUsedCustomScalars() []string {
+	if c.Scalars == nil {
+		return nil
+	}
+
+	// Build a set of known scalars for fast lookup
+	knownScalarSet := make(map[string]bool)
+	for _, scalar := range c.KnownScalars {
+		knownScalarSet[scalar] = true
+	}
+
+	customScalars := make([]string, 0)
+	for scalarName := range c.Scalars {
+		// Skip built-in scalars and known scalars (assumed to be defined elsewhere)
+		if !IsBuiltInScalar(scalarName) && !knownScalarSet[scalarName] {
+			customScalars = append(customScalars, scalarName)
+		}
+	}
+
+	return customScalars
 }

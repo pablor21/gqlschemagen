@@ -1,6 +1,7 @@
 [![GoDoc](https://godoc.org/github.com/pablor21/gqlschemagen?status.svg)](https://godoc.org/github.com/pablor21/gqlschemagen)
-[![GitHub release](https://img.shields.io/github/release/pablor21/gqlschemagen.svg?v0.1.0)](https://img.shields.io/github/release/pablor21/gqlschemagen.svg?v0.1.0)
+[![GitHub release](https://img.shields.io/github/release/pablor21/gqlschemagen.svg)](https://github.com/pablor21/gqlschemagen/releases)
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/pablor21/gqlschemagen/master/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pablor21/gqlschemagen)](https://goreportcard.com/report/github.com/pablor21/gqlschemagen)
 
 # GQLSchemaGen
 

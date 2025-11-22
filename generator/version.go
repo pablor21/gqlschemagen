@@ -4,8 +4,8 @@ import (
 	"runtime/debug"
 )
 
-// Version will be set via ldflags during build: -ldflags "-X github.com/pablor21/gqlschemagen/version.Version=v1.2.3"
-var Version = ""
+// Version will be set via ldflags during build: -ldflags "-X github.com/pablor21/gqlschemagen/generator.Version=v1.0.0"
+var Version = "v1.0.0"
 
 // Get returns the version string, trying multiple sources in order:
 // 1. Version set via ldflags (for binary builds)
@@ -14,7 +14,7 @@ var Version = ""
 // 4. Default fallback version
 func GetVersion() string {
 	// If version was set via ldflags, use it (CLI binary)
-	if Version != "" {
+	if Version != "" && Version != "v1.0.0" {
 		return Version
 	}
 
@@ -51,5 +51,5 @@ func GetVersion() string {
 	}
 
 	// Default fallback
-	return "v0.1.11"
+	return Version
 }

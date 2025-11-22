@@ -147,6 +147,34 @@ known_scalars:
    - UInt
    - UInt64
 
+# Scalar type mappings (similar to gqlgen models)
+# Maps Go types (by full package path) to GraphQL scalars
+# This allows you to map types like uuid.UUID to GraphQL ID globally
+# Example:
+# scalars:
+#   ID:
+#     model:
+#       - github.com/google/uuid.UUID
+#       - github.com/gofrs/uuid.UUID
+#   DateTime:
+#     model:
+#       - time.Time
+#   Int64:
+#     model:
+#       - int64
+#
+# When a Go type matches a model entry, the field will use the scalar type
+# instead of generating a new type. Scalar declarations are auto-generated ONLY
+# for scalars that are NOT built-in (ID, String, Int, Float, Boolean) and NOT
+# in known_scalars section.
+scalars:
+  # ID:
+  #   model:
+  #     - github.com/google/uuid.UUID
+  # DateTime:
+  #   model:
+  #     - time.Time
+
 # GQLKeep preserved sections configuration
 # Allows you to preserve custom content between regenerations
 # Add content between @gqlKeepBegin and @gqlKeepEnd markers in your schema

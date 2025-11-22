@@ -907,7 +907,6 @@ func (g *Generator) generateSingleFile(orders []string) (map[string]string, erro
 
 	if g.Config.SkipExisting && FileExists(outFile) {
 		slog.Info("Skipping existing file", "file", outFile)
-		fmt.Println("skip", outFile)
 		return map[string]string{}, nil
 	}
 
@@ -923,6 +922,15 @@ func (g *Generator) generateSingleFile(orders []string) (map[string]string, erro
 		OutputFile: outFile,
 		Strategy:   "single",
 		Namespace:  "",
+	}
+
+	// Generate custom scalar declarations first (from scalar mappings)
+	customScalars := g.Config.GetUsedCustomScalars()
+	if len(customScalars) > 0 {
+		slog.Debug("Generating custom scalar declarations", "count", len(customScalars))
+		for _, scalarName := range customScalars {
+			fmt.Fprintf(buf, "scalar %s\n\n", scalarName)
+		}
 	}
 
 	// Generate enums first
@@ -1028,6 +1036,19 @@ func (g *Generator) generatePackageFiles(orders []string) (map[string]string, er
 		return packages[pkgPath]
 	}
 
+	// Generate custom scalar declarations that will be added to the first package file
+	var scalarDeclarations string
+	customScalars := g.Config.GetUsedCustomScalars()
+	if len(customScalars) > 0 {
+		slog.Debug("Generating custom scalar declarations", "count", len(customScalars))
+		scalarBuf := &strings.Builder{}
+		for _, scalarName := range customScalars {
+			fmt.Fprintf(scalarBuf, "scalar %s\n", scalarName)
+		}
+		scalarBuf.WriteString("\n")
+		scalarDeclarations = scalarBuf.String()
+	}
+
 	// Group enums by package
 	for _, enumName := range g.P.EnumNames {
 		enumType := g.P.EnumTypes[enumName]
@@ -1120,6 +1141,12 @@ func (g *Generator) generatePackageFiles(orders []string) (map[string]string, er
 			buf = &strings.Builder{}
 			fileContents[outFile] = buf
 			slog.Debug("Creating buffer for package file", "file", outFile, "package", pkgPath)
+
+			// Add scalar declarations to the first file created
+			if scalarDeclarations != "" {
+				buf.WriteString(scalarDeclarations)
+				scalarDeclarations = "" // Only add once
+			}
 		}
 
 		// Create generation context for this package file
@@ -1199,6 +1226,19 @@ func (g *Generator) generateMultipleFiles(orders []string) (map[string]string, e
 
 	// Collect all content in memory first (map of file path -> content)
 	fileContents := make(map[string]*strings.Builder)
+
+	// Generate custom scalar declarations in a dedicated file
+	customScalars := g.Config.GetUsedCustomScalars()
+	if len(customScalars) > 0 {
+		slog.Debug("Generating custom scalar declarations", "count", len(customScalars))
+		scalarFile := filepath.Join(g.Config.Output, "_scalars"+g.Config.OutputFileExtension)
+		scalarBuf := &strings.Builder{}
+		for _, scalarName := range customScalars {
+			fmt.Fprintf(scalarBuf, "scalar %s\n", scalarName)
+		}
+		scalarBuf.WriteString("\n")
+		fileContents[scalarFile] = scalarBuf
+	}
 
 	// Generate enums first
 	slog.Debug("Generating enum files", "count", len(g.P.EnumNames))

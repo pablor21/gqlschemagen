@@ -65,6 +65,9 @@ type Parser struct {
 	pkgCache map[string]*packages.Package // dir path -> package info
 	// External types loaded on-demand (not from scanned packages)
 	ExternalTypes map[string]bool // type name -> true if loaded on-demand from external package
+	// Import paths for package aliases (e.g., "uuid" -> "github.com/google/uuid")
+	// This is per-file and gets updated during parsing
+	fileImports map[string]string // package alias/name -> import path
 }
 
 // ScannedTypeInfo stores metadata about a scanned type
@@ -95,6 +98,7 @@ func NewParser() *Parser {
 		ScannedTypes:    make(map[string]*ScannedTypeInfo),
 		pkgCache:        make(map[string]*packages.Package),
 		ExternalTypes:   make(map[string]bool),
+		fileImports:     make(map[string]string),
 	}
 }
 
@@ -158,6 +162,9 @@ func (p *Parser) parseFile(path string) error {
 
 	// Extract file-level namespace from comments after package declaration
 	fileNamespace := extractFileNamespace(f)
+
+	// Parse import statements to track package aliases
+	p.parseImports(f)
 
 	// First pass: collect type declarations (structs and potential enums)
 	for _, decl := range f.Decls {
@@ -461,6 +468,39 @@ func (p *Parser) GetPackageImportPathFromFile(filePath string, pkgName string, m
 	pkg := pkgs[0]
 	p.pkgCache[dir] = pkg
 	return pkg.PkgPath
+}
+
+// parseImports extracts import statements and maps package aliases to import paths
+// Accumulates imports from all files to handle types used across different files
+func (p *Parser) parseImports(f *ast.File) {
+	for _, importSpec := range f.Imports {
+		if importSpec.Path == nil {
+			continue
+		}
+
+		// Get the import path (remove quotes)
+		importPath := strings.Trim(importSpec.Path.Value, "\"")
+
+		// Determine the package alias
+		var pkgAlias string
+		if importSpec.Name != nil {
+			// Explicit alias: import foo "github.com/bar/baz"
+			pkgAlias = importSpec.Name.Name
+			if pkgAlias == "_" || pkgAlias == "." {
+				// Skip blank imports and dot imports
+				continue
+			}
+		} else {
+			// No alias, use the last segment of the import path
+			// "github.com/google/uuid" -> "uuid"
+			parts := strings.Split(importPath, "/")
+			pkgAlias = parts[len(parts)-1]
+		}
+
+		// Store the mapping (overwrites if same alias used in different files with different imports,
+		// but that would be a package name collision anyway)
+		p.fileImports[pkgAlias] = importPath
+	}
 }
 
 // hasGqlEnumDirective checks if a GenDecl has @gqlEnum or @GqlEnum directive in its doc comments
