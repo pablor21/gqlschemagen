@@ -8,7 +8,7 @@ export const metadata = {
 
 # **Configuration**
 
-Before generating schemas, you need to tell **GQLSchemaGen** how your project is structured and how you want the output organized.
+Before generating schemas, you need (no you don't actually *need*, but you **want**, trust me!) to tell **GQLSchemaGen** how your project is structured and how you want the output organized.
 Running:
 
 <Snippet>gqlschemagen init</Snippet>
@@ -31,26 +31,56 @@ Configure this once and the tool handles the rest.
 
 ## **Packages**
 
-Define the Go packages where annotated structs (`@gqlType`, `@gqlInput`, `@gqlEnum`) are located.
+Define the Go packages where annotated structs (`@gqlType`, `@gqlInput`, `@gqlEnum`) are located. Supports glob patterns for recursive scanning.
 
 ```yaml
 packages:
   - ./graph/model/
-  - ./domain/
+  - ./internal/domain/
+  - ./pkg/dto/**/*.go  # Recursive glob pattern
 ```
+
+**Examples:**
+- `./models/` - Scan models directory
+- `./internal/**/*.go` - Recursively scan all Go files in internal
+- `./pkg/types/user.go` - Scan specific file
 
 ## **Output Strategy**
 
 Controls how schema files are generated:
 
-| Strategy   | Meaning                        |
-| ---------- | ------------------------------ |
-| `single`   | One schema file for everything |
-| `multiple` | One file per GraphQL type      |
-| `package`  | One file per Go package        |
+| Strategy   | Behavior | Use Case |
+| ---------- | -------- | -------- |
+| `single`   | One schema file for everything | Small projects, simple schemas |
+| `multiple` | One file per GraphQL type | Large schemas, parallel development |
+| `package`  | One file per Go package | Monorepo, module-based organization |
 
 ```yaml
 strategy: multiple
+```
+
+**Examples:**
+
+**Single strategy** - all types in one file:
+```
+graph/schema/
+  └── gqlschemagen.graphqls  # User, Product, Order, etc.
+```
+
+**Multiple strategy** - separate files:
+```
+graph/schema/
+  ├── User.graphqls
+  ├── Product.graphqls
+  └── Order.graphqls
+```
+
+**Package strategy** - organized by Go package:
+```
+graph/schema/
+  ├── models.graphqls      # Types from internal/models
+  ├── dto.graphqls         # Types from internal/dto
+  └── domain.graphqls      # Types from pkg/domain
 ```
 
 ---
@@ -59,20 +89,66 @@ strategy: multiple
 
 ## **Output Path**
 
-Directory or file path depending on strategy:
+Directory or file path where schema files will be generated. The meaning depends on your strategy:
+
+- **Single strategy**: Full file path including filename
+- **Multiple/Package strategy**: Directory path
 
 ```yaml
+# Single strategy
+output: graph/schema/schema.graphqls
+
+# Multiple/Package strategy  
 output: graph/schema/
 ```
 
-## **File Naming**
+## **Output File Name**
 
-Applies when using `single` or when customizing file names in multi-file modes.
+Controls the filename when using `single` strategy:
 
 ```yaml
 output_file_name: gqlschemagen.graphqls
+```
+
+Default: `gqlschemagen.graphqls`
+
+## **Output File Extension**
+
+File extension for generated schema files in `multiple` and `package` strategies:
+
+```yaml
 output_file_extension: .graphqls
+```
+
+Default: `.graphqls`
+
+Common alternatives: `.gql`, `.graphql`
+
+## **Schema File Name Pattern**
+
+Customize file naming in `multiple` strategy using placeholders:
+
+```yaml
 schema_file_name: "{model_name}.graphqls"
+```
+
+**Available placeholders:**
+- `{model_name}` - Go struct name (e.g., `User` → `User.graphqls`)
+- `{type_name}` - GraphQL type name (e.g., `UserProfile` → `UserProfile.graphqls`)
+
+**Examples:**
+```yaml
+# Default
+schema_file_name: "{model_name}.graphqls"
+# Result: User.graphqls, Product.graphqls
+
+# With prefix
+schema_file_name: "type_{model_name}.graphqls"  
+# Result: type_User.graphqls, type_Product.graphqls
+
+# Lowercase
+schema_file_name: "{model_name}_schema.graphqls"
+# Result: user_schema.graphqls (if you implement lowercase conversion)
 ```
 
 ---
@@ -81,104 +157,556 @@ schema_file_name: "{model_name}.graphqls"
 
 ## **Field Case Transformation**
 
-How struct field names are turned into GraphQL field names:
+Controls how Go struct field names are converted to GraphQL field names:
 
 ```yaml
 field_case: camel
 ```
 
-Options: `camel`, `snake`, `pascal`, `original`, `none`.
+**Options:**
+
+| Option     | Go Field   | GraphQL Field | Description |
+|------------|------------|---------------|-------------|
+| `camel`    | `UserName` | `userName`    | camelCase (recommended) |
+| `snake`    | `UserName` | `user_name`   | snake_case |
+| `pascal`   | `UserName` | `UserName`    | PascalCase |
+| `original` | `UserName` | `UserName`    | Keep as-is |
+| `none`     | `userName` | `userName`    | No transformation |
+
+**Example:**
+```go
+// Go struct
+type User struct {
+    FirstName string
+    LastName  string
+    EmailAddress string
+}
+```
+
+```graphql
+# field_case: camel
+type User {
+  firstName: String!
+  lastName: String!
+  emailAddress: String!
+}
+
+# field_case: snake
+type User {
+  first_name: String!
+  last_name: String!
+  email_address: String!
+}
+```
 
 ## **Use JSON Tags**
 
-Use `json:"..."` tags when `gql` tags are missing.
+When enabled, uses `json:"..."` struct tags for field names if `gql:"..."` tags are not present:
 
 ```yaml
 use_json_tag: true
 ```
 
+**Example:**
+```go
+type User struct {
+    ID       string `json:"id"`
+    FullName string `json:"full_name"`
+    Internal string `json:"-"`  // Ignored (json:"-" rule)
+}
+```
+
+```graphql
+type User {
+  id: String!
+  full_name: String!
+  # Internal field is excluded
+}
+```
+
 ## **Type Name Manipulation**
 
-Prefixes & suffixes for type or input names:
+### Strip Prefix/Suffix
+
+Remove common prefixes or suffixes from type names:
 
 ```yaml
-strip_prefix: ""
-strip_suffix: ""
+strip_prefix: "DB,Pg,Api"
+strip_suffix: "DTO,Entity,Model"
+```
 
-add_type_prefix: ""
-add_type_suffix: ""
+**Example:**
+```go
+type DBUser struct {}      // → User
+type PgProduct struct {}   // → Product  
+type OrderDTO struct {}    // → Order
+type UserEntity struct {}  // → User
+```
 
+### Add Type Prefix/Suffix
+
+Add prefixes or suffixes to GraphQL **output** type names:
+
+```yaml
+add_type_prefix: "Gql"
+add_type_suffix: "Type"
+```
+
+**Example:**
+```go
+// @gqlType
+type User struct {}
+```
+
+```graphql
+# With add_type_prefix: "Gql"
+type GqlUser { ... }
+
+# With add_type_suffix: "Type"  
+type UserType { ... }
+
+# With both
+type GqlUserType { ... }
+```
+
+### Add Input Prefix/Suffix
+
+Add prefixes or suffixes to GraphQL **input** type names:
+
+```yaml
 add_input_prefix: ""
 add_input_suffix: "Input"
 ```
+
+**Example:**
+```go
+// @gqlInput(name:"CreateUser")
+type CreateUserDTO struct {}
+```
+
+```graphql
+# With add_input_suffix: "Input"
+input CreateUserInput { ... }
+
+# With add_input_prefix: "Gql" and suffix: "Payload"
+input GqlCreateUserPayload { ... }
+```
+
+**Note:** These only apply when `@gqlType` or `@gqlInput` don't specify a custom `name` parameter.
 
 ---
 
 # **4. Directives & gqlgen Integration**
 
-Enable or disable generation of gqlgen-compatible helpers:
+## **Enable gqlgen Directives**
+
+Generate [gqlgen](https://gqlgen.com/)-compatible directives for seamless integration:
 
 ```yaml
-use_gqlgen_directives: false
-model_path: ""
+use_gqlgen_directives: true
 ```
 
-If enabled, it generates:
+When enabled, generates:
+- **`@goModel`** - Maps GraphQL type to Go struct
+- **`@goField`** - Configures resolver behavior
+- **`@goTag`** - Adds Go struct tags to generated code
 
-- `@goModel`
-- `@goField`
-- `@goTag`
+**Example output:**
+```graphql
+type User @goModel(model: "github.com/myapp/models.User") {
+  id: ID! @goField(forceResolver: true)
+  email: String! @goTag(key: "validate", value: "email")
+}
+
+enum Status @goModel(model: "github.com/myapp/models.Status") {
+  ACTIVE @goEnum(value: "github.com/myapp/models.StatusActive")
+  INACTIVE @goEnum(value: "github.com/myapp/models.StatusInactive")
+}
+```
+
+## **Model Path Override**
+
+Override the base import path used in `@goModel` directives:
+
+```yaml
+model_path: "github.com/mycompany/myapp/models"
+```
+
+**When to use:**
+- Generating schemas for a different module path than source location
+- Standardizing import paths across environments
+- Building schemas for code generation
+
+**Example:**
+```go
+// Actual package: github.com/dev/prototype/models
+// But you want: github.com/mycompany/production/models
+
+// Config:
+model_path: "github.com/mycompany/production/models"
+```
+
+```graphql
+# Generated:
+type User @goModel(model: "github.com/mycompany/production/models.User") {
+  # ...
+}
+```
+
+**Default behavior:** When empty (`""`), uses the actual package import path from `go.mod`.
 
 ---
 
-# **5. Auto-Generation (Dependencies)**
+# **5. Auto-Generation**
 
-GQLSchemaGen can generate types referenced by other annotated types.
+GQLSchemaGen can automatically generate schemas for types referenced by annotated types, reducing manual `@gqlType` annotations.
+
+## **Enable Auto-Generation**
+
+```yaml
+auto_generate:
+  enabled: true
+  strategy: referenced  # recommended
+```
+
+## **Strategies**
+
+### `none` - Manual Only
+Only generate types explicitly marked with `@gqlType`, `@gqlInput`, or `@gqlInclude`:
+
+```yaml
+auto_generate:
+  enabled: true
+  strategy: none
+```
+
+**Use case:** Full control, minimal schema
+
+### `referenced` - Smart Dependencies (Recommended)
+Auto-generate types referenced by annotated types:
 
 ```yaml
 auto_generate:
   enabled: true
   strategy: referenced
   max_depth: 1
-  include_embedded: true
-  include_field_types: true
   only_referenced_by_annotated: true
-  out_of_scope_types: warn
 ```
 
-**Strategies:**
+**Example:**
+```go
+// @gqlType - Explicitly annotated
+type User struct {
+    ID      string
+    Profile UserProfile  // Auto-generated
+    Posts   []Post       // Auto-generated
+}
 
-- `none`
-- `referenced` (recommended)
-- `all`
-- `patterns`
+type UserProfile struct {
+    Bio    string
+    Avatar string
+}
+
+type Post struct {
+    Title   string
+    Content string
+}
+```
+
+**Generated:** `User`, `UserProfile`, and `Post` types
+
+### `all` - Generate Everything
+Generate schemas for all structs found in scanned packages:
+
+```yaml
+auto_generate:
+  enabled: true
+  strategy: all
+```
+
+**Use case:** Comprehensive API documentation, exploratory schemas
+
+**Warning:** May generate types you don't want exposed
+
+### `patterns` - Pattern Matching
+Generate based on glob patterns:
+
+```yaml
+auto_generate:
+  enabled: true
+  strategy: patterns
+  patterns:
+    - "*/models/*Connection"
+    - "*/models/*Edge"
+    - "*/dto/*Input"
+  exclude_patterns:
+    - "*/internal/*"
+    - "*/*_test.go"
+```
+
+**Use case:** Convention-based generation (e.g., all types ending with "Connection")
+
+## **Max Depth**
+
+Controls how deep to traverse type dependencies:
+
+```yaml
+auto_generate:
+  max_depth: 2
+```
+
+- `0` - Unlimited depth
+- `1` - Direct references only (recommended)
+- `2` - Direct + transitive references
+- `3+` - Further nesting
+
+**Example with max_depth: 1:**
+```go
+// @gqlType
+type User struct {
+    Profile UserProfile  // ✓ Generated (depth 1)
+}
+
+type UserProfile struct {
+    Settings UserSettings  // ✗ NOT generated (depth 2)
+}
+```
+
+**Example with max_depth: 2:**
+```go
+// @gqlType
+type User struct {
+    Profile UserProfile  // ✓ Generated (depth 1)
+}
+
+type UserProfile struct {
+    Settings UserSettings  // ✓ Generated (depth 2)
+}
+
+type UserSettings struct {
+    Theme ThemeConfig  // ✗ NOT generated (depth 3)
+}
+```
+
+## **Include Options**
+
+### Include Embedded Types
+Auto-generate schemas for embedded struct types:
+
+```yaml
+auto_generate:
+  include_embedded: true
+```
+
+```go
+type Timestamps struct {
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+
+// @gqlType
+type User struct {
+    Timestamps  // ✓ Timestamps type auto-generated
+    Name string
+}
+```
+
+### Include Field Types
+Auto-generate schemas for field types:
+
+```yaml
+auto_generate:
+  include_field_types: true
+```
+
+```go
+// @gqlType
+type User struct {
+    Address Address  // ✓ Address type auto-generated
+}
+
+type Address struct {
+    Street string
+    City   string
+}
+```
+
+## **Out-of-Scope Types**
+
+Controls behavior when types are referenced but not in scanned packages:
+
+```yaml
+auto_generate:
+  out_of_scope_types: warn  # or fail, ignore, exclude
+```
+
+**Options:**
+
+| Option    | Behavior |
+|-----------|----------|
+| `warn`    | Log warnings, keep field (default) |
+| `fail`    | Stop generation with error |
+| `ignore`  | Silently allow, keep field |
+| `exclude` | Remove fields with out-of-scope types |
+
+**Example:**
+```go
+// In scanned package
+// @gqlType
+type User struct {
+    ID      string
+    Company external.Company  // Not in scanned packages
+}
+```
+
+- **warn**: Generates `User` type with `Company` field, shows warning
+- **fail**: Generation stops with error
+- **ignore**: Generates `User` type silently
+- **exclude**: Generates `User` without `Company` field
+
+## **Generic Type Handling**
+
+### Unresolved Generic Type
+What to use when generic type parameters can't be resolved:
+
+```yaml
+auto_generate:
+  unresolved_generic_type: "Any"  # or "JSON", or any scalar
+```
+
+```go
+type Result[T any] struct {
+    Data T
+    Error string
+}
+
+// If T cannot be resolved:
+```
+
+```graphql
+# With unresolved_generic_type: "Any"
+type Result {
+  data: Any
+  error: String!
+}
+
+# With unresolved_generic_type: "JSON"  
+type Result {
+  data: JSON
+  error: String!
+}
+```
+
+### Suppress Generic Warnings
+Suppress out-of-scope warnings for type parameters (`T`, `K`, `V`, etc.):
+
+```yaml
+auto_generate:
+  suppress_generic_type_warnings: true
+```
+
+Useful when working with generic types where type parameters are expected to be unresolved.
 
 ---
 
-# **6. Enum Support**
+# **6. Known Scalars & Scalar Mappings**
 
-Enum generation is handled via:
+## **Known Scalars**
 
-- `@gqlEnum` on type declarations
-- `@gqlEnumValue` on individual constants
-- Supports string and iota enums
-
-Nothing special is required in the config, but the config file documents supported features.
-
----
-
-# **7. Known Scalars**
-
-Add custom scalars to avoid out-of-scope warnings:
+List custom GraphQL scalars that are defined externally (in other schemas or libraries). These types are considered "in scope" and won't trigger out-of-scope warnings:
 
 ```yaml
 known_scalars:
-  - ID
   - DateTime
   - UUID
   - JSON
-  - Bytes
+  - Upload
+  - Decimal
 ```
+
+**When to use:**
+- Using custom scalars defined in separate schema files
+- Integrating with third-party GraphQL libraries
+- Using scalars from gqlgen or other tools
+
+**Example:**
+```go
+type User struct {
+    CreatedAt DateTime  // Won't warn if DateTime is in known_scalars
+    Metadata  JSON      // Won't warn if JSON is in known_scalars
+}
+```
+
+**Built-in scalars** (always known): `Int`, `Float`, `String`, `Boolean`, `ID`
+
+## **Scalar Mappings**
+
+Map Go types to GraphQL scalars globally. Similar to gqlgen's `models` configuration:
+
+```yaml
+scalars:
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+      - github.com/gofrs/uuid.UUID
+  DateTime:
+    model:
+      - time.Time
+  Int64:
+    model:
+      - int64
+```
+
+**How it works:**
+
+1. When a field has a Go type matching a `model` entry, use the scalar instead of generating a new type
+2. Scalar declarations are **only** generated for scalars that are:
+   - Used in the schema
+   - NOT built-in (`Int`, `String`, `Float`, `Boolean`, `ID`)
+   - NOT in `known_scalars`
+
+**Example:**
+
+```go
+import (
+    "time"
+    "github.com/gofrs/uuid"
+)
+
+// @gqlType
+type User struct {
+    ID        uuid.UUID   // Maps to ID scalar
+    Name      string      // Maps to String
+    CreatedAt time.Time   // Maps to DateTime scalar
+}
+```
+
+**Generated schema:**
+```graphql
+scalar DateTime
+
+type User {
+  id: ID!
+  name: String!
+  createdAt: DateTime!
+}
+```
+
+**Why `DateTime` is declared but `ID` is not:**
+- `ID` is a built-in GraphQL scalar
+- `DateTime` is custom and not in `known_scalars`, so it needs declaration
+
+**Multiple UUID libraries:**
+```yaml
+scalars:
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+      - github.com/gofrs/uuid.UUID
+      - github.com/satori/go.uuid.UUID
+```
+
+All three UUID libraries map to the same `ID` scalar, ensuring consistency.
 
 ---
 
@@ -198,18 +726,98 @@ Place custom code between markers in your schema files and it won’t be overwri
 
 # **9. CLI & Watcher Settings**
 
-Optional file-watching:
+Configure file-watching for automatic schema regeneration during development.
+
+## **Enable Watch Mode**
 
 ```yaml
 cli:
   watcher:
-    enabled: false
+    enabled: true
     debounce_ms: 500
-    additional_paths: []
+```
+
+**Usage:**
+```bash
+gqlschemagen generate --watch
+```
+
+The tool monitors configured packages and regenerates schemas on file changes.
+
+## **Debounce Delay**
+
+Delay in milliseconds before regenerating after file changes:
+
+```yaml
+cli:
+  watcher:
+    debounce_ms: 500  # Wait 500ms after last change
+```
+
+**Recommended values:**
+- `100-300ms` - Fast feedback, may trigger multiple times
+- `500ms` - Balanced (default)
+- `1000ms+` - Slower, fewer regenerations
+
+## **Additional Paths**
+
+Monitor additional directories beyond configured `packages`:
+
+```yaml
+cli:
+  watcher:
+    additional_paths:
+      - ./config/
+      - ./pkg/types/
+```
+
+**Use case:** Watch configuration files or shared type definitions.
+
+## **Ignore Patterns**
+
+Exclude directories from watching:
+
+```yaml
+cli:
+  watcher:
     ignore_patterns:
       - vendor
       - node_modules
       - .git
+      - "*_test.go"
+      - "*.tmp"
+```
+
+**Default patterns:** `vendor`, `node_modules`, `.git`
+
+## **Watch Mode Example**
+
+Complete watcher configuration:
+
+```yaml
+cli:
+  watcher:
+    enabled: true
+    debounce_ms: 300
+    additional_paths:
+      - ./shared/types/
+    ignore_patterns:
+      - vendor
+      - node_modules
+      - .git
+      - "*_test.go"
+      - .history
+```
+
+**Terminal output:**
+```bash
+$ gqlschemagen generate --watch
+
+[INFO] Watching for changes...
+[INFO] File changed: internal/models/user.go
+[INFO] Regenerating schema...
+[SUCCESS] Schema generated successfully
+[INFO] Watching for changes...
 ```
 
 ---
