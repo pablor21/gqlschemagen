@@ -9,3 +9,10 @@ Thumbs.db
 /dev
 /tmp
 /build
+
+*.md
+!README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!docs/**/*.md
+!examples/**/*.md

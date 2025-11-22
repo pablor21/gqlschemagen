@@ -159,7 +159,9 @@ export default function DocsNavbar() {
         <NavbarItem data-active={isExamplesActive}>
           <Link
             as={NextLink}
-            href="/examples"
+            href="https://github.com/pablor21/gqlschemagen/tree/master/examples"
+            target="_blank"
+            rel="noopener noreferrer"
             color="foreground"
             className="text-sm"
           >

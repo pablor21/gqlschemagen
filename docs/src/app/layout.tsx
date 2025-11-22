@@ -4,6 +4,7 @@ import { Exo_2, Raleway } from "next/font/google";
 
 import type { Metadata } from "next";
 import { Providers } from "./providers";
+import Script from "next/script";
 
 const raleway = Raleway({
   variable: "--font-raleway",
@@ -60,9 +61,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+
       <body
         className={`${raleway.variable} ${exo.variable} antialiased font-sans dark:bg-black`}
       >
+        {process.env.NODE_ENV === "production" && (
+          <Script
+            defer
+            src="https://analytics.pramirez.dev/script.js"
+            data-website-id="0a9146bb-75d8-447c-80a1-3f37938fdc84"
+          />
+        )}
         <Providers>{children}</Providers>
       </body>
     </html>

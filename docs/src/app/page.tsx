@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardBody,
+  Chip,
   Link,
   Navbar,
   NavbarContent,
@@ -80,7 +81,9 @@ export default function Home() {
           <NavbarItem>
             <Link
               as={NextLink}
-              href="/examples"
+              href="https://github.com/pablor21/gqlschemagen/tree/master/examples"
+              target="_blank"
+              rel="noopener noreferrer"
               color="foreground"
               className="text-sm"
             >
@@ -93,7 +96,7 @@ export default function Home() {
           <NavbarItem>
             <Button
               as={Link}
-              href="[https://github.com/pablor21/gqlschemagen](https://github.com/pablor21/gqlschemagen)"
+              href="https://github.com/pablor21/gqlschemagen"
               variant="ghost"
               startContent={<Github size={18} />}
               isExternal
@@ -120,14 +123,14 @@ export default function Home() {
       <main className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
         {/* Hero Section */}
         <div className="flex flex-col items-center text-center mb-32">
-          {/* <Chip
+          <Chip
             variant="flat"
             color="primary"
             className="mb-6 border border-primary/20 bg-primary/10"
             startContent={<Zap size={14} className="ml-1" />}
           >
             v1.0.0 Now Available
-          </Chip> */}
+          </Chip>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6">
             Type-safe GraphQL <br />
@@ -278,7 +281,7 @@ type User struct {
           </div>
 
           {/* Step 3 */}
-          <div className="flex flex-col md:flex-row gap-8 items-start relative">
+          <div className="flex flex-col md:flex-row gap-8 items-start relative  mb-20 ">
             <div className="md:w-1/3 flex flex-col md:items-end md:text-right mt-4">
               <div className="text-6xl font-bold text-default-100 absolute -top-8 md:-right-6 -z-10 select-none">
                 3
@@ -302,7 +305,55 @@ type User struct {
               </Card>
             </div>
           </div>
+
+          {/* Step 4 */}
+          <div className="flex flex-col md:flex-row gap-8 items-start relative">
+            <div className="md:w-1/3 flex flex-col md:items-end md:text-right mt-4">
+              <div className="text-6xl font-bold text-default-100 absolute -top-8 md:-right-6 -z-10 select-none">
+                4
+              </div>
+              <h3 className="text-xl font-bold text-primary mb-2">What you get?</h3>
+              <p className="text-default-400">
+                A beatifully generated GraphQL schema file ready to use in your server!!!
+              </p>
+            </div>
+            <div className="md:w-2/3 w-full">
+              <Card className="bg-[#0d1117] border-default-200 relative overflow-hidden">
+                {/* MagicUI Border Beam */}
+                <BorderBeam
+                  size={250}
+                  duration={12}
+                  delay={9}
+                  borderWidth={1.5}
+                />
+
+                <div className="flex items-center justify-between px-4 py-2 bg-default-50/5 border-b border-white/5">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500/20"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500/20"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500/20"></div>
+                  </div>
+                  <span className="text-xs text-default-500">
+                    graph/schema.graphqls
+                  </span>
+                </div>
+                <CardBody className="p-6 font-mono text-sm overflow-x-auto">
+                  <CodeBlock
+                    language="graphql"
+                    filename="schema.graphqls"
+                    label="GraphQL Schema"
+                  >{`"""Represents a user"""
+type UserProfile {
+  id: ID!
+  name: String!
+}`}</CodeBlock>
+                </CardBody>
+              </Card>
+            </div>
+          </div>
         </div>
+
+
 
         {/* Final CTA */}
         <div className="mt-32 text-center">
