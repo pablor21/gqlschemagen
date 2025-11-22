@@ -69,12 +69,10 @@ const (
 
 **2. Create config file `gqlschemagen.yml`:**
 
-```yaml
-packages:
-  - ./models
-
-output: schema.graphqls
+```bash 
+gqlschemagen init
 ```
+This command generates a default `gqlschemagen.yml` configuration file in your current directory.
 
 **3. Generate schema:**
 
