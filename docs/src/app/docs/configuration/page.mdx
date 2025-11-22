@@ -466,6 +466,18 @@ auto_generate:
    # - "exclude": Automatically exclude fields with out-of-scope types
    # Default: "warn"
    out_of_scope_types: warn
+   
+   # Type to use for unresolved generic type parameters
+   # When a generic type parameter cannot be resolved (e.g., T in Result[T] when used standalone),
+   # this determines what GraphQL type to use instead
+   # Default: "" (keeps as-is, e.g., "T")
+   # Common values: "Any", "JSON", or any custom scalar name
+   unresolved_generic_type: ""
+   
+   # Suppress out-of-scope warnings for common type parameters (T, K, V, etc.)
+   # Useful when using generic types where type parameters are expected to be unresolved
+   # Default: false
+   suppress_generic_type_warnings: false
 
 # CLI configuration
 cli:
