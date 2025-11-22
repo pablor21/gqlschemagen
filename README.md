@@ -11,6 +11,8 @@
 
 Generate GraphQL schemas directly from your Go models and DTOs.
 
+> See the full documentation at [https://pablor21.github.io/gqlschemagen](https://pablor21.github.io/gqlschemagen)
+
 ## Overview
 
 > Are you a vscode user? Check out the [gqlschemagen-vscode extension](https://marketplace.visualstudio.com/items?itemName=pablor21.gqlschemagen-vscode) for seamless integration!
