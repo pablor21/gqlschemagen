@@ -17,3 +17,4 @@ Thumbs.db
 !SECURITY.md
 !docs/**/*.md
 !examples/**/*.md
+.private
