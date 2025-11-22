@@ -33,7 +33,7 @@ GQLSchemaGen generates GraphQL schema files (`.graphqls`) from your Go code usin
 ### Installation
 
 ```bash
-go install github.com/pablor21/gqlschemagen/cmd/gqlschemagen@latest
+go install github.com/pablor21/gqlschemagen@latest
 ```
 
 ### Basic Usage
