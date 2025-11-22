@@ -43,6 +43,15 @@ The tool aims to reduce boilerplate, enforce consistency, and give teams a predi
 - **Deterministic output for Git diff-friendly schemas**
   Object, field, and enum ordering is stable, making reviews clean.
 
+## Non Goals - Non Features
+
+- **Not a GraphQL server**  
+  GQLSchemaGen only generates schema files. It does not provide a GraphQL server implementation, query execution, or resolver runtime. Use it alongside libraries like [gqlgen](https://gqlgen.com/) or [graphql-go](https://github.com/graphql-go/graphql) for server functionality.
+
+- **Not a runtime validator**  
+  The tool operates at build/generation time, not runtime. It does not validate incoming GraphQL queries or enforce business logic.
+ 
+
 ---
 
 This site walks you through getting started, configuring the generator, tagging your structs, and integrating GQLSchemaGen into your development workflow.

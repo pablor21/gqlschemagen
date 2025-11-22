@@ -145,6 +145,20 @@ This will produce a `schema.graphql` file with your types. For example, the `Use
   {`"""
   Represents a user in the system
   """
+  type UserProfile {
+    id: ID!
+    name: String!
+  }`}
+</CodeBlock>
+
+Do you use gqlgen? **We got you covered!** just run:
+
+<Snippet>gqlschemagen generate --gqlgen</Snippet>
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+  {`"""
+  Represents a user in the system
+  """
   type UserProfile @goModel(model: "your-package.User") {
     id: ID!
     name: String!
