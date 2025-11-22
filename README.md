@@ -7,68 +7,150 @@
 
 [![Logo](art/logo.svg)](./art/logo.svg)
 
-## GraphQL Schema Generator
+**Generate GraphQL schemas from Go structs with annotations, generics support, and advanced field control.**
 
-Generate GraphQL schemas directly from your Go models and DTOs.
+> 📖 **Full Documentation:** [https://pablor21.github.io/gqlschemagen](https://pablor21.github.io/gqlschemagen)
 
-> See the full documentation at [https://pablor21.github.io/gqlschemagen](https://pablor21.github.io/gqlschemagen)
+> 💡 **VS Code Extension:** [gqlschemagen-vscode](https://marketplace.visualstudio.com/items?itemName=pablor21.gqlschemagen-vscode)
 
-## Overview
+## What is GQLSchemaGen?
 
-> Are you a vscode user? Check out the [gqlschemagen-vscode extension](https://marketplace.visualstudio.com/items?itemName=pablor21.gqlschemagen-vscode) for seamless integration!
+GQLSchemaGen generates GraphQL schema files (`.graphqls`) from your Go code using simple annotations. Designed to work seamlessly with [gqlgen](https://gqlgen.com), it turns your Go structs into GraphQL types, inputs, and enums—keeping your schema in sync with your codebase.
 
-**GQLSchemaGen** simplifies the process of creating GraphQL schemas from your existing Go code. Instead of manually writing schemas, you can generate them directly from your structs, saving time and reducing errors.
+### Key Features
 
-### Features
+✨ **Code-First Schema Generation** - Annotate Go structs to generate types, inputs, and enums  
+🎯 **Advanced Field Control** - Fine-grained visibility with `ro`/`wo`/`rw` tags and field filtering  
+🔄 **Auto-Discovery** - Automatically generate schemas for referenced types  
+🧬 **Full Generics Support** - Works with Go 1.18+ generic types (`Response[T]`, `Connection[T]`)  
+🗂️ **Namespace Organization** - Organize schemas into folders/namespaces  
+🔧 **Scalar Mappings** - Map Go types to GraphQL scalars globally (UUID → ID, time.Time → DateTime)  
+🛡️ **Schema Preservation** - Keep manual edits with `@GqlKeepBegin`/`@GqlKeepEnd` markers  
+⚙️ **gqlgen Integration** - Generates `@goModel`, `@goField` directives automatically
 
-- Automatically generate GraphQL types from Go structs.
-- Supports input and output types.
-- Works with standard Go structs.
-- **Full support for Go generics** - embed generic types seamlessly.
-- Simple CLI for quick schema generation.
+## Quick Start
 
-> For advanced features like integration with GQLGen, annotations, struct tags, and configuration, see the [full documentation](https://pablor21.github.io/gqlschemagen).
-
-## Installation
+### Installation
 
 ```bash
 go install github.com/pablor21/gqlschemagen/cmd/gqlschemagen@latest
 ```
 
-## Usage
+### Basic Usage
 
-Generate a schema from your project:
-
-```bash
-# In your project directory
-go run github.com/pablor21/gqlschemagen/cmd/gqlschemagen generate
-```
-
-This will scan your structs and produce the corresponding GraphQL schema files.
-
-## Quick Start Example
-
-Given a Go struct:
+**1. Annotate your Go structs:**
 
 ```go
+package models
+
+// @gqlType
 type User struct {
-    ID    string
-    Name  string
-    Email string
+    ID        string    `gql:"id,type:ID"`
+    Name      string    `gql:"name"`
+    Email     string    `gql:"email"`
+    CreatedAt time.Time `gql:"createdAt,ro"` // Read-only (excluded from inputs)
 }
+
+// @gqlInput
+type CreateUserInput struct {
+    Name     string `gql:"name"`
+    Email    string `gql:"email"`
+    Password string `gql:"password,wo"` // Write-only (excluded from types)
+}
+
+// @gqlEnum
+type UserRole string
+
+const (
+    UserRoleAdmin  UserRole = "admin"  // @gqlEnumValue(name:"ADMIN")
+    UserRoleViewer UserRole = "viewer" // @gqlEnumValue(name:"VIEWER")
+)
 ```
 
-Running the generator will produce a GraphQL type:
+**2. Create config file `gqlschemagen.yml`:**
+
+```yaml
+packages:
+  - ./models
+
+output: schema.graphqls
+```
+
+**3. Generate schema:**
+
+```bash
+gqlschemagen generate
+```
+
+**4. Generated `schema.graphqls`:**
 
 ```graphql
-type User {
-  id: String!
+type User @goModel(model: "your-module/models.User") {
+  id: ID!
   name: String!
   email: String!
+  createdAt: String!
+}
+
+input CreateUserInput {
+  name: String!
+  email: String!
+  password: String!
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
 }
 ```
 
-You can now use this schema directly in your GraphQL server.
+## Advanced Features
+
+### Multiple Types from One Struct
+
+```go
+// @gqlType(name:"User")
+// @gqlType(name:"PublicUser", ignoreAll:"true")
+// @gqlInput(name:"CreateUserInput")
+// @gqlInput(name:"UpdateUserInput")
+type User struct {
+    ID    string `gql:"id,type:ID,ro"`
+    Name  string `gql:"name,include:*"`      // Include in all
+    Email string `gql:"email,include:User"`  // Only in User type
+}
+```
+
+### Scalar Mappings
+
+```yaml
+scalars:
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+  DateTime:
+    model:
+      - time.Time
+```
+
+### Auto-Generation
+
+```yaml
+auto_generate:
+  strategy: referenced  # none | referenced | all | patterns
+  max_depth: 3
+```
+
+## Documentation
+
+- [Getting Started](https://pablor21.github.io/gqlschemagen/docs/getting-started)
+- [Configuration](https://pablor21.github.io/gqlschemagen/docs/configuration)
+- [Features](https://pablor21.github.io/gqlschemagen/docs/features/gql-types)
+  - [Types & Inputs](https://pablor21.github.io/gqlschemagen/docs/features/gql-types)
+  - [Field Filtering](https://pablor21.github.io/gqlschemagen/docs/features/field-filtering)
+  - [Scalar Mappings](https://pablor21.github.io/gqlschemagen/docs/features/scalar-mappings)
+  - [Auto-Generation](https://pablor21.github.io/gqlschemagen/docs/features/auto-generation)
+  - [Generics Support](https://pablor21.github.io/gqlschemagen/docs/features/generics)
+- [CLI Reference](https://pablor21.github.io/gqlschemagen/docs/cli-reference)
 
 ## Contributing
 
