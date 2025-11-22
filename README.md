@@ -26,7 +26,7 @@ GQLSchemaGen generates GraphQL schema files (`.graphqls`) from your Go code usin
 🗂️ **Namespace Organization** - Organize schemas into folders/namespaces  
 🔧 **Scalar Mappings** - Map Go types to GraphQL scalars globally (UUID → ID, time.Time → DateTime)  
 🛡️ **Schema Preservation** - Keep manual edits with `@GqlKeepBegin`/`@GqlKeepEnd` markers  
-⚙️ **gqlgen Integration** - Generates `@goModel`, `@goField` directives automatically
+⚙️ **gqlgen Integration** - Generates `@goModel`, `@goField` directives automatically (requires Opt-in via config or --gqlgen flag)
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ This command generates a default `gqlschemagen.yml` configuration file in your c
 **3. Generate schema:**
 
 ```bash
-gqlschemagen generate
+gqlschemagen generate --gqlgen
 ```
 
 **4. Generated `schema.graphqls`:**
