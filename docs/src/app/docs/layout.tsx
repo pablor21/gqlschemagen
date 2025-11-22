@@ -1,3 +1,4 @@
+import Footer from "@/components/layout/footer";
 import DocsNavbar, { Sidebar } from "./nav";
 
 export default function DocsLayout({
@@ -27,12 +28,7 @@ export default function DocsLayout({
         </main>
       </div>
 
-      {/* Simple Footer (copied from your homepage example) */}
-      <footer className="border-t border-white/10 py-12 text-center">
-        <p className="text-default-400 text-sm">
-          © 2025 GQLSchemaGen. Open Source MIT License.
-        </p>
-      </footer>
+     <Footer />
     </main>
   );
 }

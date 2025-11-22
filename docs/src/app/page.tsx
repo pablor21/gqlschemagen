@@ -21,6 +21,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import NavbarBrand from "@/components/layout/navbar-brand";
 import NextLink from "next/link";
 import { useState } from "react";
+import Footer from "@/components/layout/footer";
 
 // Ensure you have this component or remove the import if not using it
 
@@ -379,13 +380,7 @@ type UserProfile {
           </Card>
         </div>
       </main>
-
-      {/* Simple Footer */}
-      <footer className="border-t border-white/10 py-12 text-center">
-        <p className="text-default-400 text-sm">
-          © 2025 GQLSchemaGen. Open Source MIT License.
-        </p>
-      </footer>
+      <Footer />
     </main>
   );
 }
