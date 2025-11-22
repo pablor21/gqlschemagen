@@ -1,0 +1,416 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Generics Support",
+  description:
+    "Full support for Go generics with automatic type parameter substitution and generic struct expansion in GraphQL schema generation.",
+};
+
+# Generics Support
+
+<Alert
+  title="Full Go Generics Support"
+  description="GQLSchemaGen fully supports Go generics, automatically expanding generic types and substituting type parameters when generating GraphQL schemas."
+  color="info"
+/>
+
+Go generics allow you to write reusable, type-safe code. GQLSchemaGen understands generic types and automatically expands them in your GraphQL schema, making it easy to use generic patterns like `Response[T]`, `Paginated[T]`, or `Result[T, E]` in your API.
+
+---
+
+## How It Works
+
+When you use a generic type in an annotated struct, GQLSchemaGen:
+
+1. **Detects the generic instantiation** (e.g., `Response[*User]`)
+2. **Substitutes type parameters** with concrete types
+3. **Expands embedded generic structs** inline
+4. **Generates proper GraphQL types** with resolved field types
+
+---
+
+## Basic Example
+
+<CodeBlock language="go" filename="response.go">
+{`// Generic wrapper type (not annotated)
+type Response[T any] struct {
+    Data    T
+    Success bool
+    Message string
+}
+
+// Concrete type
+type User struct {
+    Username string
+    Email    string
+}
+
+// Use generic with concrete type parameter
+// @gqlType
+type UserResponse struct {
+    Response[*User]  // Embeds Response with T = *User
+}`}
+</CodeBlock>
+
+**Generated GraphQL:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type UserResponse {
+  data: User
+  success: Boolean!
+  message: String!
+}
+
+type User {
+  username: String!
+  email: String!
+}`}
+</CodeBlock>
+
+The generic `Response[T]` is expanded inline, and `T` is replaced with `User`.
+
+---
+
+## Multiple Type Parameters
+
+Generics with multiple type parameters are fully supported:
+
+<CodeBlock language="go" filename="result.go">
+{`// Generic Result with data and error types
+type Result[T any, E any] struct {
+    Data  T
+    Error E
+}
+
+type User struct {
+    ID   string
+    Name string
+}
+
+type APIError struct {
+    Code    int
+    Message string
+}
+
+// @gqlType
+type UserResult struct {
+    Result[*User, *APIError]
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type UserResult {
+  data: User
+  error: APIError
+}
+
+type User {
+  id: String!
+  name: String!
+}
+
+type APIError {
+  code: Int!
+  message: String!
+}`}
+</CodeBlock>
+
+---
+
+## Nested Generic Types
+
+Generics can be nested and combined:
+
+<CodeBlock language="go" filename="paginated.go">
+{`type Edge[T any] struct {
+    Node   T
+    Cursor string
+}
+
+type Connection[T any] struct {
+    Edges      []*Edge[T]
+    TotalCount int
+}
+
+type Product struct {
+    ID    string
+    Name  string
+    Price float64
+}
+
+// @gqlType
+type ProductConnection struct {
+    Connection[*Product]
+    HasMore bool
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type ProductConnection {
+  edges: [ProductConnectionEdge]!
+  totalCount: Int!
+  hasMore: Boolean!
+}
+
+type ProductConnectionEdge {
+  node: Product
+  cursor: String!
+}
+
+type Product {
+  id: String!
+  name: String!
+  price: Float!
+}`}
+</CodeBlock>
+
+Notice how `Edge[*Product]` becomes `ProductConnectionEdge` - GQLSchemaGen generates unique type names for generic instantiations.
+
+---
+
+## Auto-Generation with Generics
+
+Auto-generation works seamlessly with generics:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: referenced
+  max_depth: 2`}
+</CodeBlock>
+
+<CodeBlock language="go" filename="auto-gen.go">
+{`type Response[T any] struct {
+    Data    T
+    Success bool
+}
+
+// Not annotated - will be auto-generated
+type User struct {
+    Username string
+    Email    string
+}
+
+// @gqlType - Only this is annotated
+type UserResponse struct {
+    Response[*User]  // User auto-generated at depth 1
+}`}
+</CodeBlock>
+
+Both `UserResponse` and `User` are generated automatically.
+
+---
+
+## Generic Type Naming
+
+When GQLSchemaGen instantiates a generic type, it generates a unique name:
+
+**Pattern:** `{ParentType}{GenericType}{Index}`
+
+**Examples:**
+- `Response[*User]` embedded in `UserResponse` → Fields expanded inline in `UserResponse`
+- `Edge[*Product]` in slice → `ProductConnectionEdge`
+- `Pair[*Key, *Value]` → `TypePair` (where Type is the parent)
+
+This ensures each generic instantiation gets a unique, conflict-free type name.
+
+---
+
+## Unresolved Type Parameters
+
+If a generic type parameter cannot be resolved (e.g., standalone `Result[T]`), you can configure a fallback:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  unresolved_generic_type: "JSON"  # or "Any", ""
+  suppress_generic_type_warnings: true`}
+</CodeBlock>
+
+<CodeBlock language="go" filename="unresolved.go">
+{`type Container[T any] struct {
+    Value T  // If T is unresolved, uses fallback type
+}`}
+</CodeBlock>
+
+**Options:**
+- `""` (empty) - Keep as-is, may cause out-of-scope warnings
+- `"JSON"` - Use JSON scalar
+- `"Any"` - Use Any scalar
+- Custom scalar name
+
+---
+
+## Combining Generics with Annotations
+
+You can use generic types alongside normal annotations:
+
+<CodeBlock language="go" filename="combined.go">
+{`type Response[T any] struct {
+    Data T
+}
+
+// @gqlType
+// @gqlInput(name:"CreateUserInput")
+type CreateUser struct {
+    Username string
+    Email    string
+}
+
+// @gqlType
+type CreateUserResponse struct {
+    Response[*CreateUser]  // Expands with CreateUser
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type CreateUserResponse {
+  data: CreateUser
+}
+
+type CreateUser {
+  username: String!
+  email: String!
+}
+
+input CreateUserInput {
+  username: String!
+  email: String!
+}`}
+</CodeBlock>
+
+---
+
+## Generic Constraints
+
+Go generic constraints are respected:
+
+<CodeBlock language="go" filename="constraints.go">
+{`type Numeric interface {
+    int | int64 | float64
+}
+
+type Stats[T Numeric] struct {
+    Min   T
+    Max   T
+    Avg   T
+    Count int
+}
+
+// @gqlType
+type IntStats struct {
+    Stats[int]
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type IntStats {
+  min: Int!
+  max: Int!
+  avg: Int!
+  count: Int!
+}`}
+</CodeBlock>
+
+---
+
+## Best Practices
+
+1. **Define generic types once**: Reuse across multiple concrete types
+2. **Use meaningful type parameters**: `T` for data, `E` for errors, `K`/`V` for key/value
+3. **Annotate concrete types**: Put `@gqlType` on the concrete instantiation, not the generic definition
+4. **Leverage auto-generation**: Let GQLSchemaGen discover and generate referenced types
+5. **Set unresolved fallback**: Configure `unresolved_generic_type` to handle edge cases
+
+---
+
+## Common Patterns
+
+### Response Wrapper
+
+<CodeBlock language="go" filename="patterns.go">
+{`type Response[T any] struct {
+    Data    T
+    Success bool
+    Error   *Error
+}
+
+// @gqlType
+type UserResponse struct {
+    Response[*User]
+}
+
+// @gqlType
+type ProductResponse struct {
+    Response[*Product]
+}`}
+</CodeBlock>
+
+---
+
+### Paginated Results
+
+<CodeBlock language="go" filename="pagination.go">
+{`type PageInfo struct {
+    HasNextPage     bool
+    HasPreviousPage bool
+    StartCursor     string
+    EndCursor       string
+}
+
+type Edge[T any] struct {
+    Node   T
+    Cursor string
+}
+
+type Connection[T any] struct {
+    Edges    []*Edge[T]
+    PageInfo PageInfo
+}
+
+// @gqlType
+type UserConnection struct {
+    Connection[*User]
+}`}
+</CodeBlock>
+
+---
+
+### Result Type (Either Pattern)
+
+<CodeBlock language="go" filename="either.go">
+{`type Result[T any, E any] struct {
+    Data  *T
+    Error *E
+}
+
+// @gqlType
+type LoginResult struct {
+    Result[*Session, *AuthError]
+}`}
+</CodeBlock>
+
+---
+
+## Limitations
+
+1. **Generic definitions are not generated**: Only concrete instantiations appear in the schema
+2. **Type parameter inference**: GQLSchemaGen uses actual type arguments, not inferred types
+3. **Constraint checking**: GraphQL schema doesn't enforce Go generic constraints
+
+---
+
+Once you've defined your generic types, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+to generate GraphQL schemas with fully expanded generic types.
+
+<NextButton href="/docs/integrations/gqlgen">Next: gqlgen Integration</NextButton>

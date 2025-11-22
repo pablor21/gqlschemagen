@@ -69,6 +69,9 @@ email: String!
 | Directive             | Parameter     | Description                                                                                                                                                      |
 | --------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@GqlInput`           | `name`        | The name of the GraphQL input type to generate. This is required.                                                                                                |
+| `@GqlInput`           | `description` | Optional documentation for the input type, included in the schema as a doc string.                                                                              |
+| `@GqlInput`           | `namespace`   | Optional namespace for organizing schema files. Used with multiple files strategy.                                                                              |
+| `@GqlInput`           | `ignoreAll`   | When `true`, ignores all struct fields by default (opt-in mode). Use with field-level `rw` tag or `include`.                                                    |
 | `@GqlInputExtraField` | `name`        | Name of the extra field in the input type. Required.                                                                                                             |
 | `@GqlInputExtraField` | `type`        | GraphQL type of the field (e.g., `String!`, `ID`, `[String!]`). Required.                                                                                        |
 | `@GqlInputExtraField` | `description` | Optional documentation string for the field, which appears in the GraphQL schema.                                                                                |

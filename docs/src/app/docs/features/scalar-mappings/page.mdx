@@ -1,0 +1,292 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Scalar Mappings",
+  description:
+    "Map Go types to GraphQL scalars globally using scalar mappings, similar to gqlgen's models configuration.",
+};
+
+# Scalar Mappings
+
+<Alert
+  title="Global Type Mapping"
+  description="Scalar mappings let you map Go types to GraphQL scalars globally across your entire schema, similar to gqlgen's models configuration."
+  color="info"
+/>
+
+Scalar mappings allow you to define global type conversions from Go types to GraphQL scalars. This is especially useful for common types like UUIDs, timestamps, or custom value objects that should always map to the same GraphQL scalar regardless of where they appear in your schema.
+
+---
+
+## How It Works
+
+When a field's Go type matches a configured scalar mapping, GQLSchemaGen will:
+
+1. Use the mapped GraphQL scalar instead of generating a new type
+2. Auto-generate scalar declarations for custom scalars (non-built-in)
+3. Preserve array and nullability modifiers from the Go type
+
+**Configuration:**
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`scalars:
+    ID:
+        model:
+        - github.com/google/uuid.UUID
+        - github.com/gofrs/uuid.UUID
+    DateTime:
+        model:
+        - time.Time
+    Int64:
+        model:
+        - int64`}
+</CodeBlock>
+
+**Go struct:**
+
+<CodeBlock language="go" filename="user.go">
+{`import (
+    "time"
+    "github.com/gofrs/uuid"
+)
+
+// @gqlType
+type User struct {
+    ID        uuid.UUID   // Maps to ID scalar
+    Name      string      // Maps to String
+    CreatedAt time.Time   // Maps to DateTime scalar
+}`}
+</CodeBlock>
+
+**Generated schema:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`scalar DateTime
+
+    type User {
+        id: ID!
+        name: String!
+        createdAt: DateTime!
+    }`}
+</CodeBlock>
+
+---
+
+## Scalar Declaration Rules
+
+Scalar declarations are automatically generated based on these rules:
+
+**Generated:**
+- Custom scalars used in the schema
+- NOT in `known_scalars` list
+- NOT built-in GraphQL scalars
+
+**NOT Generated:**
+- Built-in scalars: `Int`, `Float`, `String`, `Boolean`, `ID`
+- Scalars in `known_scalars` (assumed defined elsewhere)
+
+**Example:**
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`known_scalars:
+    - Upload    # Defined in separate schema
+    - JSON      # Defined by gqlgen
+
+scalars:
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+  DateTime:
+    model:
+      - time.Time
+  Upload:
+    model:
+      - github.com/99designs/gqlgen/graphql.Upload`}
+</CodeBlock>
+
+**Result:**
+- `ID` → Not declared (built-in)
+- `DateTime` → **Declared** (custom, not in known_scalars)
+- `Upload` → Not declared (in known_scalars)
+
+---
+
+## Multiple Type Mappings
+
+You can map multiple Go types to the same GraphQL scalar:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`scalars:
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+      - github.com/gofrs/uuid.UUID
+      - github.com/satori/go.uuid.UUID`}
+</CodeBlock>
+
+This ensures consistency when different packages are used for the same concept (e.g., different UUID libraries).
+
+---
+
+## Full Package Paths
+
+Scalar mappings require **full package paths**, not just type names:
+
+<Alert
+  title="Important"
+  description="Always use complete package paths like 'github.com/google/uuid.UUID', not just 'uuid.UUID' or 'UUID'."
+  color="warning"
+/> 
+
+---
+
+## Common Scalar Mappings
+
+Here are commonly used scalar mappings:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`scalars:
+  # UUID mappings
+  ID:
+    model:
+      - github.com/google/uuid.UUID
+      - github.com/gofrs/uuid.UUID
+      - github.com/satori/go.uuid.UUID
+  
+  # Time-related mappings
+  DateTime:
+    model:
+      - time.Time
+      - google.golang.org/protobuf/types/known/timestamppb.Timestamp
+  
+  # Numeric types
+  Int64:
+    model:
+      - int64
+  
+  UInt64:
+    model:
+      - uint64
+  
+  # File uploads
+  Upload:
+    model:
+      - github.com/99designs/gqlgen/graphql.Upload
+  
+  # JSON data
+  JSON:
+    model:
+      - encoding/json.RawMessage
+      - map[string]interface{}`}
+</CodeBlock>
+
+---
+
+## Per-Field Overrides
+
+You can override scalar mappings for specific fields using the `type:` tag option:
+
+<CodeBlock language="go" filename="user.go">
+{`import "github.com/google/uuid"
+
+// @gqlType
+type User struct {
+    // Uses scalar mapping (ID)
+    ID uuid.UUID
+    // Override to use String instead
+    ExternalID uuid.UUID \`gql:"externalId,type:String"\`
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+    id: ID!
+    externalId: String!
+}`}
+</CodeBlock>
+
+---
+
+## Nullability and Arrays
+
+Scalar mappings preserve Go type modifiers:
+
+<CodeBlock language="go" filename="examples.go">
+{`import (
+    "time"
+    "github.com/google/uuid"
+)
+
+// @gqlType
+type Examples struct {
+    // Required scalar
+    ID uuid.UUID              // → ID!
+    // Optional scalar
+    OptionalID *uuid.UUID     // → ID
+    // Array of scalars
+    Tags []uuid.UUID          // → [ID!]!
+    // Optional array
+    OptionalTags *[]uuid.UUID // → [ID!]
+    // Array of optionals
+    MaybeTags []*uuid.UUID    // → [ID]!
+    // Time variations
+    CreatedAt time.Time       // → DateTime!
+    UpdatedAt *time.Time      // → DateTime
+}`}
+</CodeBlock>
+
+---
+
+## Integration with Known Scalars
+
+Scalar mappings work alongside `known_scalars`:
+
+**Use `known_scalars` when:**
+- Scalar is defined in another schema file
+- Using third-party scalar definitions
+- Integrating with gqlgen or other tools
+
+**Use `scalars` mappings when:**
+- Mapping Go types to scalars globally
+- Want automatic scalar declarations
+- Need consistent type conversions
+
+**Example:**
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`# Scalars defined externally (no declaration needed)
+known_scalars:
+  - Upload
+  - JSON
+
+# Scalars with Go type mappings (declarations auto-generated)
+scalars:
+  DateTime:
+    model:
+      - time.Time
+  ID:
+    model:
+      - github.com/google/uuid.UUID`}
+</CodeBlock>
+
+---
+
+## Best Practices
+
+1. **Use Full Paths**: Always specify complete package paths
+2. **Consistent UUIDs**: Map all UUID libraries to the same scalar (usually `ID`)
+3. **Time Types**: Map `time.Time` to a custom `DateTime` or `Timestamp` scalar
+4. **Document Custom Scalars**: Add custom scalars to `known_scalars` if defined elsewhere
+5. **Avoid Over-Mapping**: Only map types that truly represent the same GraphQL scalar
+
+---
+
+Once your scalar mappings are configured, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+to apply the mappings across your entire schema.
+
+<NextButton href="/docs/features/auto-generation">Next: Auto-Generation</NextButton>

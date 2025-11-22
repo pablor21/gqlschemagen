@@ -239,6 +239,7 @@ Once an enum is defined, it can be used in `@GqlType` annotated structs just lik
 | ------------- | ---------------------------------------------------------------- |
 | `name`        | Optional custom GraphQL enum name. Defaults to the Go type name. |
 | `description` | Optional description for the enum, used as a doc string.         |
+| `namespace`   | Optional namespace for organizing schema files. Used with multiple files strategy. |
 
 ### `@GqlEnumValue`
 
@@ -266,4 +267,4 @@ Once your enums are annotated, run:
 
 to include them in your GraphQL schema.
 
-<NextButton href="/docs/features/namespaces">Next: Namespaces</NextButton>
+<NextButton href="/docs/features/field-filtering">Next: Field Filtering</NextButton>

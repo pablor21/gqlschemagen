@@ -42,12 +42,18 @@ The preserved block can contain any GraphQL schema definition:
 
 - Custom directives
 - Manually added `union` definitions
-- Extra fields on generated types
+- Complete type definitions (not fields inside generated types)
 - Comments or documentation blocks
 - Temporary or experimental schema pieces
 - Custom imports for downstream tools (e.g., Apollo Federation directives)
 
-GQLSchemaGen treats the preserved block as opaque text—it doesn’t parse it, modify it, or validate it.
+GQLSchemaGen treats the preserved block as opaque text—it doesn't parse it, modify it, or validate it.
+
+<Alert
+  title="Placement Limitation"
+  description="Preserved blocks are placed at the start or end of the file based on configuration. You cannot insert preserved content inside generated types."
+  color="warning"
+/>
 
 ---
 
@@ -62,35 +68,9 @@ The default markers are:
 
 They must be placed on their own lines. Anything between them is kept exactly as-is.
 
-You can place the markers:
+**Important:** The preserved block is placed either at the **top** or **bottom** of the generated schema file based on your `keep_section_placement` configuration. You cannot place preserved content inside generated types.
 
-- **Inside a type** (adds custom fields)
-- **At the top of the schema** (directives, scalars)
-- **At the bottom of the schema** (extra types, unions)
-- **Between namespaces** if you’re generating into multiple directories
-
-The generator will locate these blocks before regenerating the file and restore them afterward.
-
----
-
-## Example: Adding Custom Fields
-
-<CodeBlock language="graphql" filename="Usergraphqls">
-{`type User {
-  id: ID!
-  name: String!
-
-# @GqlKeepBegin
-
-# Adds a computed field that isn't part of the Go model
-
-profileUrl: String!
-
-# @GqlKeepEnd
-
-}`} </CodeBlock>
-
-On the next regeneration, the `profileUrl` field is preserved.
+The generator will locate these blocks before regenerating the file and restore them at the configured placement (start or end).
 
 ---
 
@@ -142,4 +122,4 @@ Marker strings can be customised if your project already uses similar comment pa
 - Avoid placing `@GqlKeep` blocks inside lists or enums unless intentional; they will be preserved verbatim.
 - If you're working with version control, it’s often helpful to commit schema files before regenerating so you can easily compare changes.
 
-<NextButton href="/docs/integrations/gqlgen">GQLGen</NextButton>
+<NextButton href="/docs/integrations/gqlgen">Next: gqlgen Integration</NextButton>

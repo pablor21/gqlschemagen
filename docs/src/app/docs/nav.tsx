@@ -27,11 +27,16 @@ const docsNavItems = [
       { label: "GQL Types", href: "/docs/features/gql-types" },
       { label: "GQL Inputs", href: "/docs/features/gql-inputs" },
       { label: "GQL Enums", href: "/docs/features/gql-enums" },
+      { label: "Field Filtering", href: "/docs/features/field-filtering" },
+      { label: "Scalar Mappings", href: "/docs/features/scalar-mappings" },
+      { label: "Auto-Generation", href: "/docs/features/auto-generation" },
+      { label: "Generics", href: "/docs/features/generics" },
       { label: "Namespaces", href: "/docs/features/namespaces" },
       {
         label: "Keeping Schema Modifications",
         href: "/docs/features/keeping-schema-modifications",
       },
+       
     ],
   },
   {

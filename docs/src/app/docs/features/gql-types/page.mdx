@@ -40,10 +40,11 @@ type UserProfile @goModel(model: "your-package.User") {
 
 ## Additional Fields with `@GqlTypeExtraField` and `@GqlExtraField`
 
-Sometimes you need fields in your GraphQL API that don’t exist in your Go structs. GQLSchemaGen supports this through two directives:
+Sometimes you need fields in your GraphQL API that don't exist in your Go structs. GQLSchemaGen supports this through three directives:
 
-- **`@GqlTypeExtraField`** — adds fields _only to the GraphQL type_
-- **`@GqlExtraField`** — adds fields to _both_ the GraphQL type **and** its corresponding input
+- **`@GqlTypeExtraField`** — adds fields _only to GraphQL types_
+- **`@GqlInputExtraField`** — adds fields _only to GraphQL inputs_
+- **`@GqlExtraField`** — adds fields to _both_ GraphQL types **and** inputs
 
 ### Adding Type-Only Fields with `@GqlTypeExtraField`
 
@@ -120,7 +121,8 @@ Use these directives to control which Go structs and fields are included in your
 | -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
 | `@GqlType`           | `name`        | The GraphQL type name to generate.                                                                                                   | `"UserProfile"`                             |
 | `@GqlType`           | `description` | Documentation for the GraphQL type, included in the schema as a doc string.                                                          | `"Represents a user in the system"`         |
-| `@GqlType`           | `omitFields`  | Comma-separated list of struct fields to exclude from the schema.                                                                    | `"Password,SecretToken"`                    |
+| `@GqlType`           | `namespace`   | Optional namespace for organizing schema files. Used with multiple files strategy.                                                   | `"api/v1"`                                 |
+| `@GqlType`           | `ignoreAll`   | When `true`, ignores all struct fields by default (opt-in mode). Use with field-level `rw` tag or `include`.                        | `ignoreAll:"true"`                         |
 | `@GqlTypeExtraField` | `name`        | Name of an additional field to include in the GraphQL type.                                                                          | `"posts"`                                   |
 | `@GqlTypeExtraField` | `type`        | GraphQL type for the extra field.                                                                                                    | `"[Post!]!"`                                |
 | `@GqlTypeExtraField` | `description` | Documentation string for the extra field.                                                                                            | `"User's posts"`                            |
@@ -130,7 +132,7 @@ Use these directives to control which Go structs and fields are included in your
 
 <Alert
   title="Important"
-  description="Only structs annotated with @GqlType are included in schema generation. Extra fields can be added to these types using @GqlTypeExtraField."
+  description="Only structs annotated with @GqlType (or @GqlInclude for auto-generation) are included in schema generation. Use @GqlIgnoreAll on a type to enable opt-in field inclusion mode."
   color="warning"
 />
 
@@ -208,12 +210,86 @@ These struct tags give you precise control over how each field is represented ac
 
 ---
 
+## Type-Level Directives
+
+### `@GqlInclude` - Include Without Specifying Type/Input
+
+Use `@GqlInclude` when you want a type to be included in schema generation but don't need to specify whether it's a type or input. This is particularly useful with auto-generation strategies:
+
+<CodeBlock language="go" filename="domain.go">
+{`// @GqlInclude - Will generate both type and input
+type User struct {
+    ID   string
+    Name string
+}`}
+</CodeBlock>
+
+**Generates:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+  id: ID!
+  name: String!
+}
+
+input UserInput {
+  id: ID!
+  name: String!
+}`}
+</CodeBlock>
+
+**Use `@GqlInclude` when:**
+- You want both type and input generated automatically
+- Working with auto-generation strategies (see [Auto-Generation](/docs/features/auto-generation))
+- You don't need custom names or descriptions
+
+### `@GqlIgnoreAll` - Opt-In Field Inclusion
+
+Use `@GqlIgnoreAll` to ignore all struct fields by default, then selectively include fields using the `include` or `rw` tag:
+
+<CodeBlock language="go" filename="secure.go">
+{`// @gqlType(name:"User")
+// @GqlIgnoreAll
+type User struct {
+    ID          string \`gql:"id,type:ID,include"\`  // Explicitly included
+    Name        string \`gql:"name,rw"\`             // Explicitly included
+    Email       string \`gql:"email,include"\`       // Explicitly included
+    Password    string                              // Ignored (no include tag)
+    InternalKey string                              // Ignored (no include tag)
+}`}
+</CodeBlock>
+
+**Generates:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+  id: ID!
+  name: String!
+  email: String!
+  # Password and InternalKey excluded
+}`}
+</CodeBlock>
+
+**Use `@GqlIgnoreAll` when:**
+- Working with types that have many internal/sensitive fields
+- You want a security-first approach (explicit opt-in)
+- The majority of fields should NOT be exposed
+
+**Note:** `@GqlIgnoreAll` can also be set per-type/input using the `ignoreAll` parameter:
+```go
+// @gqlType(name:"PublicUser", ignoreAll:"true")
+// @gqlType(name:"AdminUser")  // ignoreAll not set, all fields included
+```
+
+---
+
 ## Best Practices
 
 - Use descriptive names and doc strings to generate self-documenting GraphQL types.
 - Keep your Go struct fields aligned with your GraphQL type naming conventions (`camelCase` by default).
 - Use `@GqlTypeExtraField` for computed or virtual fields that exist only in GraphQL.
-- Avoid overusing `omitFields`; prefer defining minimal structs for API exposure if possible.
+- Use `@GqlInclude` for simple cases where you want both type and input generated.
+- Use `@GqlIgnoreAll` for security-sensitive types to ensure explicit field opt-in.
 
 ---
 
@@ -221,6 +297,6 @@ Once you have annotated your types, run:
 
 <Snippet>gqlschemagen generate</Snippet>
 
-to produce your GraphQL schema. Your next steps could be exploring **enum generation** or **input types**, which are handled on separate pages.
+to produce your GraphQL schema.
 
-<NextButton href="/docs/features/gql-inputs">GQL Inputs</NextButton>
+<NextButton href="/docs/features/gql-inputs">Next: GQL Inputs</NextButton>

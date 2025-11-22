@@ -1,0 +1,383 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Field Filtering",
+  description:
+    "Control field visibility across different GraphQL types and inputs using advanced filtering rules with ro, wo, rw, include, and omit tags.",
+};
+
+# Field Filtering
+
+<Alert
+  title="Fine-Grained Field Control"
+  description="Field filtering lets you control which fields appear in specific GraphQL types and inputs using struct tags, enabling precise API design and security."
+  color="info"
+/>
+
+Field filtering provides powerful control over field visibility, allowing you to:
+- Hide sensitive fields from specific types
+- Create read-only or write-only fields
+- Version your API by selectively exposing fields
+- Use `@gqlIgnoreAll` for opt-in field inclusion
+
+---
+
+## Quick Reference
+
+| Tag | Behavior | Example |
+|-----|----------|---------|
+| `ro` | Read-only (types only, excluded from inputs) | `gql:"createdAt,ro"` |
+| `wo` | Write-only (inputs only, excluded from types) | `gql:"password,wo"` |
+| `rw` | Read-write (included everywhere) | `gql:"name,rw"` |
+| `include` | Include in specific types/inputs | `gql:"email,include:UserV2"` |
+| `omit` / `ignore` | Exclude from specific types/inputs | `gql:"internal,omit:PublicUser"` |
+
+---
+
+## Read-Only Fields (`ro`)
+
+Fields marked with `ro` appear **only in types**, not in inputs:
+
+<CodeBlock language="go" filename="readonly.go">
+{`// @gqlType(name:"User")
+// @gqlInput(name:"UserInput")
+type User struct {
+    ID        string \`gql:"id,type:ID,ro"\`  // Only in User type
+    CreatedAt string \`gql:"createdAt,ro"\`   // Only in User type
+    Name      string \`gql:"name"\`           // In both
+    Email     string \`gql:"email"\`          // In both
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+  id: ID!
+  createdAt: String!
+  name: String!
+  email: String!
+}
+
+input UserInput {
+  name: String!
+  email: String!
+  # id and createdAt excluded (read-only)
+}`}
+</CodeBlock>
+
+**Use case:** Timestamps, IDs, computed fields
+
+---
+
+## Write-Only Fields (`wo`)
+
+Fields marked with `wo` appear **only in inputs**, not in types:
+
+<CodeBlock language="go" filename="writeonly.go">
+{`// @gqlType(name:"User")
+// @gqlInput(name:"CreateUserInput")
+type User struct {
+    ID       string \`gql:"id,type:ID"\`
+    Name     string \`gql:"name"\`
+    Email    string \`gql:"email"\`
+    Password string \`gql:"password,wo"\`  // Only in input
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+  id: ID!
+  name: String!
+  email: String!
+  # password excluded (write-only)
+}
+
+input CreateUserInput {
+  id: ID!
+  name: String!
+  email: String!
+  password: String!
+}`}
+</CodeBlock>
+
+**Use case:** Passwords, secrets, confirmation codes
+
+---
+
+## Read-Write Fields (`rw`)
+
+Fields marked with `rw` are included everywhere:
+
+<CodeBlock language="go" filename="readwrite.go">
+{`// @gqlType(name:"User")
+// @gqlInput(name:"UserInput")
+type User struct {
+    ID    string \`gql:"id,type:ID,rw"\`
+    Name  string \`gql:"name,rw"\`
+    Email string \`gql:"email,rw"\`
+}`}
+</CodeBlock>
+
+All fields appear in both `User` type and `UserInput`.
+
+**Use case:** Explicit inclusion, overriding `@gqlIgnoreAll`
+
+---
+
+## Field-Specific Filtering with `include` and `omit`
+
+### Include Field in Specific Types
+
+Use `include:` to include a field only in specific types:
+
+<CodeBlock language="go" filename="include.go">
+{`// @gqlType(name:"AdminUser")
+// @gqlType(name:"PublicUser")
+type User struct {
+    ID       string \`gql:"id,type:ID"\`
+    Name     string \`gql:"name"\`
+    Email    string \`gql:"email,include:AdminUser"\`  // Only in AdminUser
+    Internal string \`gql:"internal,include:AdminUser"\` // Only in AdminUser
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type AdminUser {
+  id: ID!
+  name: String!
+  email: String!      # Included
+  internal: String!   # Included
+}
+
+type PublicUser {
+  id: ID!
+  name: String!
+  # email and internal excluded
+}`}
+</CodeBlock>
+
+---
+
+### Omit Field from Specific Types
+
+Use `omit:` or `ignore:` to exclude a field from specific types:
+
+<CodeBlock language="go" filename="omit.go">
+{`// @gqlType(name:"FullUser")
+// @gqlType(name:"PartialUser")
+type User struct {
+    ID    string \`gql:"id,type:ID"\`
+    Name  string \`gql:"name"\`
+    Email string \`gql:"email,omit:PartialUser"\`  // Excluded from PartialUser
+    Phone string \`gql:"phone,ignore:PartialUser"\` // Also excluded
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type FullUser {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String!
+}
+
+type PartialUser {
+  id: ID!
+  name: String!
+  # email and phone excluded
+}`}
+</CodeBlock>
+
+**Note:** `omit` and `ignore` are aliases (identical behavior)
+
+---
+
+## Multiple Type Filtering
+
+Apply filtering rules to multiple types using comma-separated lists:
+
+<CodeBlock language="go" filename="multiple.go">
+{`// @gqlType(name:"AdminView")
+// @gqlType(name:"UserView")
+// @gqlInput(name:"AdminInput")
+// @gqlInput(name:"UserInput")
+type Account struct {
+    ID         string  \`gql:"id,type:ID,ro"\`
+    Name       string  \`gql:"name"\`
+    SecretData string  \`gql:"secretData,ro:AdminView"\`              // Only in AdminView type
+    Balance    float64 \`gql:"balance,ro:AdminView,UserView"\`        // In AdminView and UserView types
+    AdminNotes string  \`gql:"adminNotes,include:AdminView,AdminInput"\` // Only in admin types/inputs
+}`}
+</CodeBlock>
+
+**Syntax rules:**
+- **Multiple types**: Use quotes with commas: `"Type1,Type2,Type3"`
+- **No spaces**: `"AdminView,UserView"` not `"AdminView, UserView"`
+- **Single type**: Quotes optional: `include:AdminView` or `include:"AdminView"`
+
+---
+
+## Type-Specific Read/Write Rules
+
+Combine `ro`/`wo` with type lists for fine-grained control:
+
+<CodeBlock language="go" filename="specific-ro.go">
+{`// @gqlType(name:"AdminView")
+// @gqlType(name:"UserView")
+// @gqlInput(name:"AdminInput")
+// @gqlInput(name:"UserInput")
+type Account struct {
+    ID       string \`gql:"id,type:ID,ro"\`                     // Read-only everywhere
+    Name     string \`gql:"name"\`                              // In all
+    Secret   string \`gql:"secret,ro:AdminView"\`              // Read-only ONLY in AdminView
+    Balance  float64 \`gql:"balance,ro:AdminView,UserView"\`   // Read-only in Admin and User views
+    Password string \`gql:"password,wo:AdminInput,UserInput"\` // Write-only in both inputs
+}`}
+</CodeBlock>
+
+**Result:**
+- `secret` field:
+  - ✓ In `AdminView` type
+  - ✗ Not in `UserView`, `AdminInput`, `UserInput`
+- `balance` field:
+  - ✓ In `AdminView` and `UserView` types
+  - ✗ Not in `AdminInput` or `UserInput`
+- `password` field:
+  - ✓ In `AdminInput` and `UserInput`
+  - ✗ Not in `AdminView` or `UserView`
+
+---
+
+## The `@gqlIgnoreAll` Directive
+
+Use `@gqlIgnoreAll` to ignore all fields by default, then selectively include fields:
+
+<CodeBlock language="go" filename="ignore-all.go">
+{`// @gqlType(name:"User")
+// @gqlInput(name:"UserInput")
+// @gqlIgnoreAll  // Ignore all fields by default
+type User struct {
+    ID       string \`gql:"id,type:ID,include:*"\` // Include in all
+    Name     string \`gql:"name,include"\`         // Include in all (shorthand)
+    Email    string \`gql:"email,rw:*"\`           // Include in all (rw shorthand)
+    Password string // Ignored (no include tag)
+    Internal string // Ignored (no include tag)
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type User {
+  id: ID!
+  name: String!
+  email: String!
+}
+
+input UserInput {
+  id: ID!
+  name: String!
+  email: String!
+}`}
+</CodeBlock>
+
+**Use case:** Security-first approach, expose only explicitly included fields
+
+---
+
+## Wildcard Usage
+
+Use `*` to apply a rule to **all** types/inputs:
+
+<CodeBlock language="go" filename="wildcard.go">
+{`// @gqlIgnoreAll
+// @gqlType(name:"User")
+// @gqlInput(name:"UserInput")
+type User struct {
+    ID    string \`gql:"id,type:ID,include:*"\`  // Included in all
+    Name  string \`gql:"name,include"\`          // Shorthand for include:*
+    Email string \`gql:"email,rw:*"\`            // Shorthand for include:*
+}`}
+</CodeBlock>
+
+**Equivalents:**
+- `include:*` = `include` = `rw:*` = `rw`
+
+---
+
+## API Versioning Example
+
+Create multiple versions of the same type with different field sets:
+
+<CodeBlock language="go" filename="versioning.go">
+{`// @gqlType(name:"UserV1")
+// @gqlType(name:"UserV2")
+// @gqlType(name:"UserV3")
+type User struct {
+    ID       string \`gql:"id,type:ID"\`                      // In all versions
+    Name     string \`gql:"name"\`                            // In all versions
+    Email    string \`gql:"email,include:UserV2,UserV3"\`    // Added in V2, kept in V3
+    Phone    string \`gql:"phone,include:UserV3"\`           // Added in V3 only
+    OldField string \`gql:"oldField,omit:UserV2,UserV3"\`    // Only in V1, removed in V2+
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type UserV1 {
+  id: ID!
+  name: String!
+  oldField: String!
+}
+
+type UserV2 {
+  id: ID!
+  name: String!
+  email: String!
+}
+
+type UserV3 {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String!
+}`}
+</CodeBlock>
+
+---
+
+## Rules and Precedence
+
+1. **`@gqlIgnoreAll`** ignores all fields by default
+2. **Explicit `include`, `rw`** overrides `@gqlIgnoreAll`
+3. **`omit`, `ignore`** takes precedence over default inclusion
+4. **Type-specific rules** override global rules (`ro`, `wo`, `rw`)
+5. **Wildcard `*`** applies to all types/inputs
+
+---
+
+## Best Practices
+
+1. **Use `ro` for timestamps and IDs**: Prevents modification in inputs
+2. **Use `wo` for passwords**: Keeps secrets out of type schemas
+3. **Use `@gqlIgnoreAll` for security**: Opt-in approach for sensitive data
+4. **Version with `include`**: Incrementally expose fields across API versions
+5. **Document filtering logic**: Make field visibility rules clear in comments
+
+---
+
+Once you've configured field filtering, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+to generate schemas with precise field control.
+
+<NextButton href="/docs/features/scalar-mappings">Next: Scalar Mappings</NextButton>

@@ -1,0 +1,460 @@
+import NextButton from "@/components/docs/next-button";
+
+export const metadata = {
+  title: "Auto-Generation",
+  description:
+    "Automatically generate GraphQL schemas for types referenced by annotated types, reducing manual annotations.",
+};
+
+# Auto-Generation
+
+<Alert
+  title="Smart Schema Generation"
+  description="Auto-generation automatically creates GraphQL schemas for types referenced by annotated types, reducing the need for manual @gqlType annotations throughout your codebase."
+  color="info"
+/>
+
+Instead of annotating every struct with `@gqlType`, auto-generation intelligently discovers and generates schemas for types that are referenced by your annotated types. This significantly reduces boilerplate while maintaining control over your public API surface.
+
+---
+
+## Quick Start
+
+Enable auto-generation in your configuration:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: referenced
+  max_depth: 1`}
+</CodeBlock>
+
+**Example:**
+
+<CodeBlock language="go" filename="models.go">
+{`// Only this type is annotated
+// @gqlType
+type User struct {
+    ID      string
+    Profile UserProfile  // Auto-generated!
+    Posts   []Post       // Auto-generated!
+}
+
+// No annotations needed - auto-generated
+type UserProfile struct {
+    Bio    string
+    Avatar string
+}
+
+// No annotations needed - auto-generated
+type Post struct {
+    Title   string
+    Content string
+}`}
+</CodeBlock>
+
+All three types are generated in the schema automatically.
+
+---
+
+## Strategies
+
+### `none` - Manual Only
+
+Only generate types with explicit `@gqlType`, `@gqlInput`, or `@gqlInclude`:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: none`}
+</CodeBlock>
+
+**Use case:** Full control, minimal schema, explicit API design
+
+---
+
+### `referenced` - Smart Dependencies (Recommended)
+
+Auto-generate types referenced by annotated types:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: referenced
+  max_depth: 1
+  only_referenced_by_annotated: true`}
+</CodeBlock>
+
+**Example:**
+
+<CodeBlock language="go" filename="user.go">
+{`// Explicitly annotated - "root" type
+// @gqlType
+type User struct {
+    Profile UserProfile  // Depth 1 - auto-generated
+    Posts   []Post       // Depth 1 - auto-generated
+}
+
+// Auto-generated (referenced by User)
+type UserProfile struct {
+    Settings UserSettings  // Depth 2 - NOT generated (max_depth: 1)
+}
+
+// Auto-generated (referenced by User)
+type Post struct {
+    Title string
+}`}
+</CodeBlock>
+
+**Generated types:** `User`, `UserProfile`, `Post`
+
+**Not generated:** `UserSettings` (exceeds max_depth)
+
+---
+
+### `all` - Generate Everything
+
+Auto-generate all structs found in scanned packages:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: all`}
+</CodeBlock>
+
+**Use case:** Quick prototyping, internal APIs, full codebase exposure
+
+<Alert
+  title="Warning"
+  description="This strategy generates schemas for ALL structs, including internal types. Use exclude_patterns to filter unwanted types."
+  color="warning"
+/>
+
+---
+
+### `patterns` - Pattern-Based Selection
+
+Generate based on glob patterns:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  enabled: true
+  strategy: patterns
+  patterns:
+    - "*/models/*"
+    - "*/dto/*DTO"
+    - "*/graph/model/*"
+  exclude_patterns:
+    - "*/internal/*"
+    - "*/*_test.go"`}
+</CodeBlock>
+
+**Use case:** Organized codebases with clear package structure
+
+---
+
+## Max Depth Control
+
+The `max_depth` setting controls how deep to traverse type dependencies:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  max_depth: 1  # Recommended`}
+</CodeBlock>
+
+**Values:**
+- `0` - Unlimited depth (use with caution)
+- `1` - Direct references only (recommended)
+- `2` - Direct + transitive references
+- `3+` - Further nesting
+
+**Example with depth: 1:**
+
+<CodeBlock language="go" filename="depth-example.go">
+{`// @gqlType - Root (depth 0)
+type User struct {
+    Profile UserProfile  // Depth 1 - ✓ Generated
+}
+
+// Auto-generated at depth 1
+type UserProfile struct {
+    Settings UserSettings  // Depth 2 - ✗ NOT generated
+}
+
+// Not generated (exceeds max_depth)
+type UserSettings struct {
+    Theme string
+}`}
+</CodeBlock>
+
+**Example with depth: 2:**
+
+<CodeBlock language="go" filename="depth-example.go">
+{`// @gqlType - Root (depth 0)
+type User struct {
+    Profile UserProfile  // Depth 1 - ✓ Generated
+}
+
+// Auto-generated at depth 1
+type UserProfile struct {
+    Settings UserSettings  // Depth 2 - ✓ Generated
+}
+
+// Auto-generated at depth 2
+type UserSettings struct {
+    Theme ThemeConfig  // Depth 3 - ✗ NOT generated
+}`}
+</CodeBlock>
+
+---
+
+## Include Options
+
+### Embedded Types
+
+Auto-generate embedded struct types:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  include_embedded: true`}
+</CodeBlock>
+
+<CodeBlock language="go" filename="embedded.go">
+{`type Timestamps struct {
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+
+// @gqlType
+type User struct {
+    Timestamps  // ✓ Timestamps type auto-generated
+    Name string
+}`}
+</CodeBlock>
+
+---
+
+### Field Types
+
+Auto-generate types used in fields:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  include_field_types: true`}
+</CodeBlock>
+
+<CodeBlock language="go" filename="fields.go">
+{`// @gqlType
+type User struct {
+    Address Address  // ✓ Address type auto-generated
+    Posts   []Post   // ✓ Post type auto-generated
+}
+
+type Address struct {
+    Street string
+    City   string
+}
+
+type Post struct {
+    Title string
+}`}
+</CodeBlock>
+
+---
+
+## Excluding Types
+
+### Using `@gqlIgnore`
+
+Prevent auto-generation of specific types:
+
+<CodeBlock language="go" filename="exclude.go">
+{`// @gqlType
+type User struct {
+    Profile UserProfile
+    Internal InternalData  // Won't be generated
+}
+
+type UserProfile struct {
+    Bio string
+}
+
+// @gqlIgnore - Explicitly excluded
+type InternalData struct {
+    SecretKey string
+}`}
+</CodeBlock>
+
+---
+
+### Using Exclude Patterns
+
+Exclude entire packages or patterns:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  exclude_patterns:
+    - "*/internal/*"
+    - "*/vendor/*"
+    - "*/*_test.go"
+    - "*/mock/*"`}
+</CodeBlock>
+
+---
+
+## Out-of-Scope Types
+
+Controls behavior when referenced types are not in scanned packages:
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  out_of_scope_types: warn  # or fail, ignore, exclude`}
+</CodeBlock>
+
+**Options:**
+
+| Option | Behavior |
+|--------|----------|
+| `warn` | Log warnings, keep field (default) |
+| `fail` | Stop generation with error |
+| `ignore` | Silently allow, keep field |
+| `exclude` | Remove fields with out-of-scope types |
+
+**Example:**
+
+<CodeBlock language="go" filename="out-of-scope.go">
+{`// In scanned package
+// @gqlType
+type User struct {
+    ID      string
+    Company external.Company  // Not in scanned packages
+}`}
+</CodeBlock>
+
+- **warn**: Generates `User` with `Company` field, shows warning
+- **fail**: Stops generation with error
+- **ignore**: Generates `User` silently
+- **exclude**: Generates `User` without `Company` field
+
+---
+
+## The `@GqlInclude` Directive
+
+Mark types for inclusion without explicit type/input directives:
+
+<CodeBlock language="go" filename="include.go">
+{`// @GqlInclude - Marked for generation
+type Address struct {
+    Street string
+    City   string
+}
+
+// This type can now be referenced without triggering out-of-scope warnings,
+// even if it's not directly referenced by an annotated type`}
+</CodeBlock>
+
+**Use cases:**
+- Shared utility types
+- Base types used across multiple schemas
+- Types in external packages that should be included
+
+---
+
+## Generic Type Handling
+
+Auto-generation works with generic types and properly expands type parameters:
+
+<CodeBlock language="go" filename="generics.go">
+{`type Response[T any] struct {
+    Data    T
+    Success bool
+    Message string
+}
+
+type User struct {
+    Username string
+}
+
+// @gqlType
+type UserResponse struct {
+    Response[*User]  // Expands to include User fields
+}`}
+</CodeBlock>
+
+**Generated:**
+
+<CodeBlock language="graphql" filename="schema.graphqls">
+{`type UserResponse {
+  data: User
+  success: Boolean!
+  message: String!
+}
+
+type User {
+  username: String!
+}`}
+</CodeBlock>
+
+See [Generics Documentation](/docs/features/generics) for more details.
+
+---
+
+## Best Practices
+
+1. **Start with `referenced` strategy**: Provides good balance of automation and control
+2. **Use `max_depth: 1`**: Prevents excessive schema generation
+3. **Leverage `@gqlIgnore`**: Explicitly exclude internal/sensitive types
+4. **Use exclude_patterns**: Filter entire package hierarchies
+5. **Review generated schemas**: Ensure only intended types are public
+6. **Combine with explicit annotations**: Annotate your API boundary, auto-generate internals
+
+---
+
+## Configuration Reference
+
+<CodeBlock language="yaml" filename="gqlschemagen.yml">
+{`auto_generate:
+  # Enable/disable auto-generation
+  enabled: true
+  
+  # Strategy: none, referenced, all, patterns
+  strategy: referenced
+  
+  # Maximum depth for dependency traversal (0 = unlimited)
+  max_depth: 1
+  
+  # Include/exclude patterns (for patterns strategy)
+  patterns:
+    - "*/models/*"
+  exclude_patterns:
+    - "*/internal/*"
+    - "*/*_test.go"
+  
+  # Only auto-generate types referenced by annotated types
+  only_referenced_by_annotated: true
+  
+  # Auto-generate embedded struct types
+  include_embedded: true
+  
+  # Auto-generate field types
+  include_field_types: true
+  
+  # Action for out-of-scope types: warn, fail, ignore, exclude
+  out_of_scope_types: warn
+  
+  # Generic type parameter fallback (when unresolved)
+  unresolved_generic_type: ""
+  
+  # Suppress warnings for common type parameters (T, K, V, etc.)
+  suppress_generic_type_warnings: true`}
+</CodeBlock>
+
+---
+
+Once configured, run:
+
+<Snippet>gqlschemagen generate</Snippet>
+
+to generate schemas with auto-discovery enabled.
+
+<NextButton href="/docs/features/generics">Next: Generics Support</NextButton>
